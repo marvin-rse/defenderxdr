@@ -25,18 +25,19 @@ This query calculates the estimated log size (in GB) and average entry size (in 
 // Define the base data once to save performance
 let LogData = union withsource=TableName 
     Device*,         // All Defender for Endpoint tables
-    Email*,          // Defender for Office 365
+ //   Email*,          // Defender for Office 365
     UrlClickEvents,  // Defender for Office 365 (Safe Links)
     CloudAppEvents   // Defender for Cloud Apps
-| where TableName !startswith "DeviceTvm" // Excludes all tables starting with 'DeviceTvm' (currenlty not supported for direct log ingestion into datalake)
-| where TimeGenerated > ago(30d)              // Use 'Timestamp' if you are running this without Unified Sec Ops Portal activated
+| where TableName !startswith "DeviceTvm" // Excludes all tables starting with 'DeviceTvm' (currently not supported for direct log ingestion into datalake)
+| where TimeGenerated > ago(30d)          // Use 'Timestamp' if you are running this without Unified Sec Ops Portal activated
 | project TableName, size = estimate_data_size(*);
 // 1. Calculate stats per table
 LogData
 | summarize 
     TotalEntries = count(), 
-    TotalSizeGB = round(sum(size) / 1073741824.0, 3), // Divides by 1024^3 to calculate GB
-    AvgSizeKB = round(avg(size) / 1024.0, 2)          // Average size per log entry in KB
+    TotalSizeGB = round(sum(size) / 1073741824.0, 3),                  // Divides by 1024^3 to calculate raw GB
+    DataLakeCompressedGB = round((sum(size) / 1073741824.0) / 6.0, 3), // Applies 6:1 compression ratio for Data Lake
+    AvgSizeKB = round(avg(size) / 1024.0, 2)                           // Average size per log entry in KB
     by TableName
 // Append the grand total row
 | union (
@@ -44,6 +45,7 @@ LogData
     | summarize 
         TotalEntries = count(), 
         TotalSizeGB = round(sum(size) / 1073741824.0, 3), 
+        DataLakeCompressedGB = round((sum(size) / 1073741824.0) / 6.0, 3),
         AvgSizeKB = round(avg(size) / 1024.0, 2)
     | extend TableName = "--- TOTAL SUM ---"
 )
