@@ -6,8 +6,6 @@
 
 This query calculates the estimated log size (in GB) and average entry size (in KB) for Microsoft Defender for Endpoint, Defender for Office 365, and Defender for Cloud Apps tables over the last 30 days. It intentionally excludes `DeviceTvm*` (Threat and Vulnerability Management) tables and provides both a per-table breakdown and a unified grand total. 
 
-Additionally, this query is highly valuable for determining and planning the expected data volume that will be ingested into a Data Lake (e.g., when configuring continuous raw data export via the Microsoft Defender Streaming API).
-
 **Notes & Considerations:**
 * **Estimation Variance:** Please be aware that this calculation is only an estimation based on the `estimate_data_size()` KQL function. Real ingestion values and billing sizes in your workspace or Data Lake may vary by approximately +/- 10%.
 * **Storage Savings:** When planning for Data Lake storage, you can typically factor in a **6:1 data compression rate**. Microsoft automatically applies this 6:1 compression ratio for billing Data Lake storage, meaning 600 GB of raw uncompressed logs will effectively be billed as 100 GB of compressed data.
