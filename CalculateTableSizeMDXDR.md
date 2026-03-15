@@ -10,6 +10,9 @@ This query calculates the estimated log size (in GB) and average entry size (in 
 * **Estimation Variance:** Please be aware that this calculation is only an estimation based on the `estimate_data_size()` KQL function. Real ingestion values and billing sizes in your workspace or Data Lake may vary by approximately +/- 10%.
 * **Storage Savings:** When planning for Data Lake storage, you can typically factor in a **6:1 data compression rate**. Microsoft automatically applies this 6:1 compression ratio for billing Data Lake storage, meaning 600 GB of raw uncompressed logs will effectively be billed as 100 GB of compressed data.
 
+**Note on Advanced Hunting Quotas:**
+Running broad queries across multiple extensive tables can consume a significant amount of your Advanced Hunting resources. Microsoft Defender XDR enforces usage limits to ensure service stability. For example, if your queries exceed the allocated **CPU quota** within a 15-minute cycle, you may be temporarily blocked from running further queries until the next cycle begins.
+
 #### Author
 
 - Name: Marvin Rose
