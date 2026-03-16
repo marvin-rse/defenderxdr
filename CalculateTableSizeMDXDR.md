@@ -58,32 +58,34 @@ LogData
 **Note on Extrapolation and Accuracy:**
 To avoid exceeding Advanced Hunting CPU quotas (which can easily happen when analyzing 30 days of uncompressed data at once), this query analyzes a shorter timeframe (e.g., 1 or 7 days) and extrapolates the results to a 30-day period. Because log generation naturally fluctuates due to weekends, patch days, or sporadic events, you can expect an extrapolation variance of approximately 10% to 15% compared to a full 30-day scan. This margin of error is perfectly normal and generally acceptable for initial Data Lake or SIEM storage sizing. Always include a 15-20% buffer in your final calculation.
 ```KQL
-// Analyze 7 day to save CPU quota, then extrapolate to 30 days
-let daysToAnalyze = 7;
-let daysToProject = 30;
+// Analyze a smaller timeframe to save CPU quota, then extrapolate to 30 days
+let daysToAnalyze = 7; // Number of days to actually query (e.g., 1 or 7)
+let daysToProject = 30; // Number of days to extrapolate to
+let multiplier = todouble(daysToProject) / daysToAnalyze; // Calculates the exact extrapolation factor
+
 let LogData = union withsource=TableName 
     Device*,         
     Email*,          
     UrlClickEvents,  
     CloudAppEvents   
 | where TableName !startswith "DeviceTvm" 
-| where TimeGenerated > ago(1d) // ONLY look at the last 24 hours
+| where TimeGenerated > ago(daysToAnalyze * 1d) // Dynamically uses the variable!
 | project TableName, size = estimate_data_size(*);
 // 1. Calculate stats per table
 LogData
 | summarize 
-    TotalEntries30Days = count() * daysToProject, // Extrapolates entries
-    TotalSizeGB = round((sum(size) * daysToProject) / 1073741824.0, 3),                  
-    DataLakeCompressedGB = round(((sum(size) * daysToProject) / 1073741824.0) / 6.0, 3), 
-    AvgSizeKB = round(avg(size) / 1024.0, 2) // Avg size stays the same                           
+    TotalEntries30Days = count() * multiplier, // Extrapolates entries correctly
+    TotalSizeGB = round((sum(size) * multiplier) / 1073741824.0, 3),                  
+    DataLakeCompressedGB = round(((sum(size) * multiplier) / 1073741824.0) / 6.0, 3), 
+    AvgSizeKB = round(avg(size) / 1024.0, 2)   // Avg size stays the same                           
     by TableName
 // Append the grand total row
 | union (
     LogData
     | summarize 
-        TotalEntries30Days = count() * daysToProject, 
-        TotalSizeGB = round((sum(size) * daysToProject) / 1073741824.0, 3), 
-        DataLakeCompressedGB = round(((sum(size) * daysToProject) / 1073741824.0) / 6.0, 3),
+        TotalEntries30Days = count() * multiplier, 
+        TotalSizeGB = round((sum(size) * multiplier) / 1073741824.0, 3), 
+        DataLakeCompressedGB = round(((sum(size) * multiplier) / 1073741824.0) / 6.0, 3),
         AvgSizeKB = round(avg(size) / 1024.0, 2)
     | extend TableName = "--- TOTAL SUM (30 Days Extrapolated) ---"
 )
