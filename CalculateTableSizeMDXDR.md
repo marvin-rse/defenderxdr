@@ -71,6 +71,7 @@ FinalData
     | extend TableName = "--- TOTAL SUM (30 Days Calculated) ---"
 )
 | sort by TotalSizeGB desc
+```
 
 ## v0.2 
 > **WARNING: This query will definitely hit the quota of Advanced Hunting.** Because it calculates the size of every single row over a full 30-day period, it consumes significant CPU resources. You may need to reduce the timeframe (e.g., to 1 or 7 days) and extrapolate the results to avoid being temporarily blocked.
@@ -106,9 +107,9 @@ LogData
 ```
 
 ## v0.1
-```KQL
 > **WARNING: Querying anything larger than 1 day may exceed your Advanced Hunting CPU quota.** In tested environments, analyzing more than 24 hours of uncompressed data with this query resulted in immediate quota exhaustion and temporary blocking.
 // Analyze a smaller timeframe to save CPU quota, then extrapolate to 30 days
+```KQL
 let daysToAnalyze = 1; // Set to 1 because anything larger might exceed the CPU quota
 let daysToProject = 30; // Number of days to extrapolate to
 let multiplier = todouble(daysToProject) / daysToAnalyze; // Calculates the exact extrapolation factor
