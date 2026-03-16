@@ -73,40 +73,7 @@ FinalData
 | sort by TotalSizeGB desc
 ```
 
-## v0.2 
-> **WARNING: This query will definitely hit the quota of Advanced Hunting.** Because it calculates the size of every single row over a full 30-day period, it consumes significant CPU resources. You may need to reduce the timeframe (e.g., to 1 or 7 days) and extrapolate the results to avoid being temporarily blocked.
-```KQL
-// Define the base data once to save performance
-let LogData = union withsource=TableName 
-    Device*,         // All Defender for Endpoint tables
-    Email*,          // Defender for Office 365
-    UrlClickEvents,  // Defender for Office 365 (Safe Links)
-    CloudAppEvents   // Defender for Cloud Apps
-| where TableName !startswith "DeviceTvm" // Excludes all tables starting with 'DeviceTvm' (currently not supported for direct log ingestion into datalake)
-| where TimeGenerated > ago(30d)          // Use 'Timestamp' if you are running this without Unified Sec Ops Portal activated
-| project TableName, size = estimate_data_size(*);
-// 1. Calculate stats per table
-LogData
-| summarize 
-    TotalEntries = count(), 
-    TotalSizeGB = round(sum(size) / 1073741824.0, 3),                  // Divides by 1024^3 to calculate raw GB
-    DataLakeCompressedGB = round((sum(size) / 1073741824.0) / 6.0, 3), // Applies 6:1 compression ratio for Data Lake
-    AvgSizeKB = round(avg(size) / 1024.0, 2)                           // Average size per log entry in KB
-    by TableName
-// Append the grand total row
-| union (
-    LogData
-    | summarize 
-        TotalEntries = count(), 
-        TotalSizeGB = round(sum(size) / 1073741824.0, 3), 
-        DataLakeCompressedGB = round((sum(size) / 1073741824.0) / 6.0, 3),
-        AvgSizeKB = round(avg(size) / 1024.0, 2)
-    | extend TableName = "--- TOTAL SUM ---"
-)
-| sort by TotalSizeGB desc
-```
-
-## v0.1
+## v0.2
 > **WARNING: Querying anything larger than 1 day may exceed your Advanced Hunting CPU quota.** In tested environments, analyzing more than 24 hours of uncompressed data with this query resulted in immediate quota exhaustion and temporary blocking.
 // Analyze a smaller timeframe to save CPU quota, then extrapolate to 30 days
 ```KQL
@@ -138,6 +105,38 @@ LogData
         DataLakeCompressedGB = round(((sum(size) * multiplier) / 1073741824.0) / 6.0, 3),
         AvgSizeKB = round(avg(size) / 1024.0, 2)
     | extend TableName = "--- TOTAL SUM (30 Days Extrapolated) ---"
+)
+| sort by TotalSizeGB desc
+```
+## v0.1
+> **WARNING: This query will definitely hit the quota of Advanced Hunting.** Because it calculates the size of every single row over a full 30-day period, it consumes significant CPU resources. You may need to reduce the timeframe (e.g., to 1 or 7 days) and extrapolate the results to avoid being temporarily blocked.
+```KQL
+// Define the base data once to save performance
+let LogData = union withsource=TableName 
+    Device*,         // All Defender for Endpoint tables
+    Email*,          // Defender for Office 365
+    UrlClickEvents,  // Defender for Office 365 (Safe Links)
+    CloudAppEvents   // Defender for Cloud Apps
+| where TableName !startswith "DeviceTvm" // Excludes all tables starting with 'DeviceTvm' (currently not supported for direct log ingestion into datalake)
+| where TimeGenerated > ago(30d)          // Use 'Timestamp' if you are running this without Unified Sec Ops Portal activated
+| project TableName, size = estimate_data_size(*);
+// 1. Calculate stats per table
+LogData
+| summarize 
+    TotalEntries = count(), 
+    TotalSizeGB = round(sum(size) / 1073741824.0, 3),                  // Divides by 1024^3 to calculate raw GB
+    DataLakeCompressedGB = round((sum(size) / 1073741824.0) / 6.0, 3), // Applies 6:1 compression ratio for Data Lake
+    AvgSizeKB = round(avg(size) / 1024.0, 2)                           // Average size per log entry in KB
+    by TableName
+// Append the grand total row
+| union (
+    LogData
+    | summarize 
+        TotalEntries = count(), 
+        TotalSizeGB = round(sum(size) / 1073741824.0, 3), 
+        DataLakeCompressedGB = round((sum(size) / 1073741824.0) / 6.0, 3),
+        AvgSizeKB = round(avg(size) / 1024.0, 2)
+    | extend TableName = "--- TOTAL SUM ---"
 )
 | sort by TotalSizeGB desc
 ```
