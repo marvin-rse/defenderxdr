@@ -62,7 +62,6 @@ To avoid exceeding Advanced Hunting CPU quotas (which can easily happen when ana
 let daysToAnalyze = 7; // Number of days to actually query (e.g., 1 or 7)
 let daysToProject = 30; // Number of days to extrapolate to
 let multiplier = todouble(daysToProject) / daysToAnalyze; // Calculates the exact extrapolation factor
-
 let LogData = union withsource=TableName 
     Device*,         
     Email*,          
