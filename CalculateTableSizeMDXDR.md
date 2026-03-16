@@ -37,14 +37,14 @@ Without clear visibility into log generation volumes, organizations may face une
 ```KQL
 // 1. Sample the average row size using only the last 1 hour (Very CPU efficient)
 let SizeSample = union withsource=TableName 
-    Device*, UrlClickEvents, CloudAppEvents //, Email*
+    Device*, UrlClickEvents, CloudAppEvents, Email*
 | where TableName !startswith "DeviceTvm" // Excludes all tables starting with 'DeviceTvm'
 | where TimeGenerated > ago(1h)           // Only process heavy size estimation on 1 hour of data
 | project TableName, size = estimate_data_size(*)
 | summarize AvgSizeByte = avg(size) by TableName;
 // 2. Count the exact number of rows for the last 30 days (Fast, uses indexes)
 let CountData = union withsource=TableName 
-    Device*, UrlClickEvents, CloudAppEvents //, Email*
+    Device*, UrlClickEvents, CloudAppEvents, Email*
 | where TableName !startswith "DeviceTvm"
 | where TimeGenerated > ago(30d)          // Count is cheap, we can do 30 days easily
 | summarize TotalEntries30Days = count() by TableName;
