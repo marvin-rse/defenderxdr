@@ -84,6 +84,9 @@ Volume
           Enabled, ReportOnly, NotApplied, Disabled, Other
 | order by Day asc
 ```
+## Output
+<img width="1527" height="729" alt="image" src="https://github.com/user-attachments/assets/30f260a3-172a-4588-ad15-483560718124" />
+
 
 ## Customization
 
