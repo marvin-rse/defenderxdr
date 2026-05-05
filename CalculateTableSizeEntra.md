@@ -19,7 +19,7 @@ Microsoft Defender XDR exposes equivalent sign-in data through Advanced Hunting 
 
 ## Queries
 
-Run each query separately in the Microsoft Defender portal (`security.microsoft.com` → Advanced Hunting). KQL statements cannot be chained like SQL — the queries below are independent.
+Run each query separately in the Microsoft Defender portal (`security.microsoft.com` → Advanced Hunting).
 
 ### Entra sign-in events (preferred)
 
@@ -61,9 +61,6 @@ The number returned by `estimate_data_size()` is **not** the number you will be 
    - `EnrichedOffice365AuditLogs`, `NetworkAccessTraffic` (optional)
 
    Their contribution depends heavily on tenant size, automation footprint, and whether Graph Activity Logs are enabled.
-3. **Per-table 8 KB billing minimum.** Log Analytics rounds each ingested record up to a minimum billable size. For high-volume, small-record tables this can inflate the bill noticeably.
-
-A pragmatic rule of thumb: **plan with the XDR estimate × 1.05 to × 1.15** for the sign-in tables, then add the volume of the tables not covered by XDR (see point 2 above), and validate against `Usage` once the connector has been live for a few days.
 
 ## Validation after the connector is enabled
 
