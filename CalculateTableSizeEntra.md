@@ -12,7 +12,7 @@ Microsoft Defender XDR exposes equivalent sign-in data through Advanced Hunting 
 
 | XDR Advanced Hunting table | Roughly equivalent Sentinel / Log Analytics tables |
 | --- | --- |
-| `EntraSignInEventsBeta` | `SigninLogs` + `AADNonInteractiveUserSignInLogs` + `AADServicePrincipalSignInLogs` + `AADManagedIdentitySignInLogs` (newer, extended schema) |
+| `EntraIdSignInEvents` | `SigninLogs` + `AADNonInteractiveUserSignInLogs` + `AADServicePrincipalSignInLogs` + `AADManagedIdentitySignInLogs` (newer, extended schema) |
 | `AADSignInEventsBeta` | Same coverage as above, older schema |
 
 > **Pick one, not both.** `EntraSignInEventsBeta` and `AADSignInEventsBeta` largely overlap. Summing them double-counts events. `EntraSignInEventsBeta` is the more current of the two.
@@ -24,7 +24,7 @@ Run each query separately in the Microsoft Defender portal (`security.microsoft.
 ### Entra sign-in events (preferred)
 
 ```kusto
-EntraSignInEventsBeta
+EntraIdSignInEvents
 | where Timestamp > ago(30d)
 | extend _size = estimate_data_size(*)
 | summarize
