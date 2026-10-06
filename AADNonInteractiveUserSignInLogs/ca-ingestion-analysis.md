@@ -45,9 +45,10 @@ Adjust the `take 500` value if you need higher confidence (e.g., `take 2000`) or
 ## The Query
 
 ```kusto
+let StartDate = datetime(2026-04-01);
 let Policies = 
     AADNonInteractiveUserSignInLogs
-    | where TimeGenerated >= datetime(2026-04-01)
+    | where TimeGenerated >= StartDate
     | extend Day = bin(TimeGenerated, 1d)
     | partition by Day (take 500)
     | extend CAPolicies = todynamic(tostring(ConditionalAccessPolicies))
@@ -55,7 +56,7 @@ let Policies =
     | summarize MaxTotalPolicies = max(PolicyCount) by Day;
 let PolicyStates = 
     AADNonInteractiveUserSignInLogs
-    | where TimeGenerated >= datetime(2026-04-01)
+    | where TimeGenerated >= StartDate
     | extend Day = bin(TimeGenerated, 1d)
     | partition by Day (take 500)
     | extend CAPolicies = todynamic(tostring(ConditionalAccessPolicies))
@@ -72,7 +73,7 @@ let PolicyStates =
     | evaluate pivot(State, sum(DistinctPolicies));
 let Volume = 
     Usage
-    | where TimeGenerated >= datetime(2026-04-01)
+    | where TimeGenerated >= StartDate
     | where DataType == "AADNonInteractiveUserSignInLogs"
     | summarize IngestedGB = sum(Quantity) / 1000.0 by Day = bin(TimeGenerated, 1d);
 Volume
