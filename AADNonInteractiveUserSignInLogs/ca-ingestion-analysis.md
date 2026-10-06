@@ -45,7 +45,7 @@ Adjust the `take 500` value if you need higher confidence (e.g., `take 2000`) or
 ## The Query
 
 ```kusto
-let StartDate = datetime(2026-04-01);
+let StartDate = startofday(ago(30d));
 let Policies = 
     AADNonInteractiveUserSignInLogs
     | where TimeGenerated >= StartDate
