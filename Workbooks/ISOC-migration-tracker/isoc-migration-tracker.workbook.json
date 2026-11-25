@@ -1,0 +1,631 @@
+{
+  "version": "Notebook/1.0",
+  "items": [
+    {
+      "type": 9,
+      "content": {
+        "version": "KqlParameterItem/1.0",
+        "crossComponentResources": [
+          "value::all"
+        ],
+        "parameters": [
+          {
+            "id": "a1",
+            "version": "KqlParameterItem/1.0",
+            "name": "Workspace",
+            "label": "Sentinel workspace",
+            "type": 5,
+            "isRequired": true,
+            "query": "where type =~ 'microsoft.operationalinsights/workspaces' | project id",
+            "crossComponentResources": [
+              "value::all"
+            ],
+            "typeSettings": {
+              "resourceTypeFilter": {
+                "microsoft.operationalinsights/workspaces": true
+              },
+              "additionalResourceOptions": [],
+              "showDefault": false
+            },
+            "queryType": 1,
+            "resourceType": "microsoft.resourcegraph/resources"
+          },
+          {
+            "id": "a2",
+            "version": "KqlParameterItem/1.0",
+            "name": "Lookback",
+            "label": "Data lookback",
+            "type": 2,
+            "isRequired": true,
+            "typeSettings": {
+              "additionalResourceOptions": [],
+              "showDefault": false
+            },
+            "jsonData": "[{\"value\":\"1\",\"label\":\"1 day\",\"selected\":true},{\"value\":\"7\",\"label\":\"7 days\"},{\"value\":\"14\",\"label\":\"14 days\"},{\"value\":\"30\",\"label\":\"30 days\"}]",
+            "value": "1"
+          },
+          {
+            "id": "a3",
+            "version": "KqlParameterItem/1.0",
+            "name": "Scope",
+            "label": "Rules",
+            "type": 2,
+            "isRequired": true,
+            "typeSettings": {
+              "additionalResourceOptions": [],
+              "showDefault": false
+            },
+            "jsonData": "[{\"value\":\"enabled\",\"label\":\"Enabled rules\",\"selected\":true},{\"value\":\"all\",\"label\":\"All rules\"}]",
+            "value": "enabled"
+          },
+          {
+            "id": "a6",
+            "version": "KqlParameterItem/1.0",
+            "name": "Compare",
+            "label": "Record comparison",
+            "type": 2,
+            "isRequired": true,
+            "typeSettings": {
+              "additionalResourceOptions": [],
+              "showDefault": false
+            },
+            "jsonData": "[{\"value\":\"off\",\"label\":\"Off\",\"selected\":true},{\"value\":\"on\",\"label\":\"On (last 24 hours)\"}]",
+            "value": "off"
+          },
+          {
+            "id": "a4",
+            "version": "KqlParameterItem/1.0",
+            "name": "WorkspaceId",
+            "type": 1,
+            "isHiddenWhenLocked": true,
+            "query": "where id =~ '{Workspace}' | project tostring(properties.customerId)",
+            "crossComponentResources": [
+              "value::all"
+            ],
+            "queryType": 1,
+            "resourceType": "microsoft.resourcegraph/resources"
+          },
+          {
+            "id": "a5",
+            "version": "KqlParameterItem/1.0",
+            "name": "Rules",
+            "type": 1,
+            "isHiddenWhenLocked": true,
+            "query": "{\"version\": \"ARMEndpoint/1.0\", \"data\": null, \"headers\": [], \"method\": \"GET\", \"path\": \"{Workspace}/providers/Microsoft.SecurityInsights/alertRules\", \"urlParams\": [{\"key\": \"api-version\", \"value\": \"2024-09-01\"}], \"batchDisabled\": false, \"transformers\": [{\"type\": \"jsonpath\", \"settings\": {\"tablePath\": \"$\", \"columns\": [{\"path\": \"$.value\", \"columnid\": \"value\"}]}}]}",
+            "queryType": 12
+          },
+          {
+            "id": "a7",
+            "version": "KqlParameterItem/1.0",
+            "name": "Functions",
+            "type": 1,
+            "isHiddenWhenLocked": true,
+            "query": "{\"version\": \"ARMEndpoint/1.0\", \"data\": null, \"headers\": [], \"method\": \"GET\", \"path\": \"{Workspace}/savedSearches\", \"urlParams\": [{\"key\": \"api-version\", \"value\": \"2020-08-01\"}], \"batchDisabled\": false, \"transformers\": [{\"type\": \"jsonpath\", \"settings\": {\"tablePath\": \"$\", \"columns\": [{\"path\": \"$.value[?(@.properties.functionAlias && /\\\\b(SigninLogs|AADNonInteractiveUserSignInLogs|AADServicePrincipalSignInLogs|AADManagedIdentitySignInLogs|AuditLogs|MicrosoftGraphActivityLogs|AADUserRiskEvents|AADRiskyUsers|AADRiskyServicePrincipals|AADServicePrincipalRiskEvents|AADProvisioningLogs|ADFSSignInLogs)\\\\b/.test(@.properties.query))].properties.functionAlias\", \"columnid\": \"value\"}]}}]}",
+            "queryType": 12
+          }
+        ],
+        "style": "pills",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces"
+      },
+      "name": "parameters"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "## ISOC migration tracker: Microsoft Entra ID detections\n\nThis workbook checks which of your analytics rules query the classic Microsoft Entra ID tables, which Defender XDR table would replace them under ISOC, whether both have data, and whether the rule can be converted.\n\nThe assessment is calculated from each rule's query at runtime, so it works for content hub rules, modified rules and your own:\n\n- **Convertible**: only renames and type changes needed.\n- **Less precise**: an exclusion or text search can't be reproduced, so the rule may alert more often.\n- **Review**: filters on an exact error text; an ErrorCode filter probably covers it.\n- **Not convertible**: the core logic filters on a column that `EntraIdSignInEvents` doesn't have.\n- **Needs AuditLogs**: the rule also queries `AuditLogs`. Microsoft's migration tool maps it to `EntraIdDirectoryAuditEvents`, which isn't available yet and isn't on the ISOC list. As soon as that table has data in your tenant, these rules move to *Review*.\n\nRule data comes from the Microsoft Sentinel API, table data from Advanced Hunting. Background: [marvinrose.dev](https://marvinrose.dev/posts/isoc-entra-id-detections/)"
+      },
+      "name": "intro"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "{\"__advancedHuntingSettings\": true, \"query\": \"let LookbackDays = {Lookback};\\nlet Rules = parse_json(```{Rules:escapejson}```);\\nlet Mapping = datatable(SourceTable:string, TargetTable:string, Coverage:string)[\\n \\\"SigninLogs\\\", \\\"EntraIdSignInEvents\\\", \\\"Included in ISOC\\\",\\n \\\"AADNonInteractiveUserSignInLogs\\\", \\\"EntraIdSignInEvents\\\", \\\"Included in ISOC\\\",\\n \\\"AADServicePrincipalSignInLogs\\\", \\\"EntraIdSpnSignInEvents\\\", \\\"Included in ISOC\\\",\\n \\\"AADManagedIdentitySignInLogs\\\", \\\"EntraIdSpnSignInEvents\\\", \\\"Included in ISOC\\\",\\n \\\"MicrosoftGraphActivityLogs\\\", \\\"GraphAPIAuditEvents\\\", \\\"Included in ISOC\\\",\\n \\\"AuditLogs\\\", \\\"EntraIdDirectoryAuditEvents\\\", \\\"Not on ISOC list\\\"];\\nlet Schema = union isfuzzy=true\\n    (SigninLogs | getschema | project T = \\\"SigninLogs\\\", ColumnName),\\n    (AADNonInteractiveUserSignInLogs | getschema | project T = \\\"AADNonInteractiveUserSignInLogs\\\", ColumnName),\\n    (AADServicePrincipalSignInLogs | getschema | project T = \\\"AADServicePrincipalSignInLogs\\\", ColumnName),\\n    (AADManagedIdentitySignInLogs | getschema | project T = \\\"AADManagedIdentitySignInLogs\\\", ColumnName),\\n    (AuditLogs | getschema | project T = \\\"AuditLogs\\\", ColumnName),\\n    (MicrosoftGraphActivityLogs | getschema | project T = \\\"MicrosoftGraphActivityLogs\\\", ColumnName),\\n    (EntraIdSignInEvents | getschema | project T = \\\"EntraIdSignInEvents\\\", ColumnName),\\n    (EntraIdSpnSignInEvents | getschema | project T = \\\"EntraIdSpnSignInEvents\\\", ColumnName),\\n    (GraphAPIAuditEvents | getschema | project T = \\\"GraphAPIAuditEvents\\\", ColumnName),\\n    (EntraIdDirectoryAuditEvents | getschema | project T = \\\"EntraIdDirectoryAuditEvents\\\", ColumnName);\\nlet Renames = datatable(SourceTable:string, SourceColumn:string, TargetColumn:string)[\\n \\\"SigninLogs\\\", \\\"UserPrincipalName\\\", \\\"AccountUpn\\\",\\n \\\"SigninLogs\\\", \\\"UserDisplayName\\\", \\\"AccountDisplayName\\\",\\n \\\"SigninLogs\\\", \\\"Identity\\\", \\\"AccountDisplayName\\\",\\n \\\"SigninLogs\\\", \\\"UserId\\\", \\\"AccountObjectId\\\",\\n \\\"SigninLogs\\\", \\\"AppDisplayName\\\", \\\"Application\\\",\\n \\\"SigninLogs\\\", \\\"AppId\\\", \\\"ApplicationId\\\",\\n \\\"SigninLogs\\\", \\\"ResultType\\\", \\\"ErrorCode\\\",\\n \\\"SigninLogs\\\", \\\"Status.errorCode\\\", \\\"ErrorCode\\\",\\n \\\"SigninLogs\\\", \\\"Location\\\", \\\"Country\\\",\\n \\\"SigninLogs\\\", \\\"LocationDetails\\\", \\\"City\\\",\\n \\\"SigninLogs\\\", \\\"LocationDetails.city\\\", \\\"City\\\",\\n \\\"SigninLogs\\\", \\\"LocationDetails.state\\\", \\\"State\\\",\\n \\\"SigninLogs\\\", \\\"LocationDetails.countryOrRegion\\\", \\\"Country\\\",\\n \\\"SigninLogs\\\", \\\"LocationDetails.geoCoordinates\\\", \\\"Latitude\\\",\\n \\\"SigninLogs\\\", \\\"DeviceDetail\\\", \\\"OSPlatform\\\",\\n \\\"SigninLogs\\\", \\\"DeviceDetail.operatingSystem\\\", \\\"OSPlatform\\\",\\n \\\"SigninLogs\\\", \\\"DeviceDetail.browser\\\", \\\"Browser\\\",\\n \\\"SigninLogs\\\", \\\"DeviceDetail.deviceId\\\", \\\"EntraIdDeviceId\\\",\\n \\\"SigninLogs\\\", \\\"DeviceDetail.displayName\\\", \\\"DeviceName\\\",\\n \\\"SigninLogs\\\", \\\"DeviceDetail.isCompliant\\\", \\\"IsCompliant\\\",\\n \\\"SigninLogs\\\", \\\"DeviceDetail.isManaged\\\", \\\"IsManaged\\\",\\n \\\"SigninLogs\\\", \\\"DeviceDetail.trustType\\\", \\\"DeviceTrustType\\\",\\n \\\"SigninLogs\\\", \\\"RiskEventTypes_V2\\\", \\\"RiskEventTypes\\\",\\n \\\"SigninLogs\\\", \\\"UserType\\\", \\\"IsGuestUser\\\",\\n \\\"SigninLogs\\\", \\\"ResourceIdentity\\\", \\\"ResourceId\\\",\\n \\\"SigninLogs\\\", \\\"UniqueTokenIdentifier\\\", \\\"UniqueTokenId\\\",\\n \\\"SigninLogs\\\", \\\"Id\\\", \\\"RequestId\\\",\\n \\\"SigninLogs\\\", \\\"IsThroughGlobalSecureAccess\\\", \\\"IsSignInThroughGlobalSecureAccess\\\",\\n \\\"SigninLogs\\\", \\\"CreatedDateTime\\\", \\\"Timestamp\\\",\\n \\\"SigninLogs\\\", \\\"AADTenantId\\\", \\\"TenantId\\\",\\n \\\"AADNonInteractiveUserSignInLogs\\\", \\\"UserPrincipalName\\\", \\\"AccountUpn\\\",\\n \\\"AADNonInteractiveUserSignInLogs\\\", \\\"UserDisplayName\\\", \\\"AccountDisplayName\\\",\\n \\\"AADNonInteractiveUserSignInLogs\\\", \\\"Identity\\\", \\\"AccountDisplayName\\\",\\n \\\"AADNonInteractiveUserSignInLogs\\\", \\\"UserId\\\", \\\"AccountObjectId\\\",\\n \\\"AADNonInteractiveUserSignInLogs\\\", \\\"AppDisplayName\\\", \\\"Application\\\",\\n \\\"AADNonInteractiveUserSignInLogs\\\", \\\"AppId\\\", \\\"ApplicationId\\\",\\n \\\"AADNonInteractiveUserSignInLogs\\\", \\\"ResultType\\\", \\\"ErrorCode\\\",\\n \\\"AADNonInteractiveUserSignInLogs\\\", \\\"Status.errorCode\\\", \\\"ErrorCode\\\",\\n \\\"AADNonInteractiveUserSignInLogs\\\", \\\"Location\\\", \\\"Country\\\",\\n \\\"AADNonInteractiveUserSignInLogs\\\", \\\"LocationDetails\\\", \\\"City\\\",\\n \\\"AADNonInteractiveUserSignInLogs\\\", \\\"LocationDetails.city\\\", \\\"City\\\",\\n \\\"AADNonInteractiveUserSignInLogs\\\", \\\"LocationDetails.state\\\", \\\"State\\\",\\n \\\"AADNonInteractiveUserSignInLogs\\\", \\\"LocationDetails.countryOrRegion\\\", \\\"Country\\\",\\n \\\"AADNonInteractiveUserSignInLogs\\\", \\\"LocationDetails.geoCoordinates\\\", \\\"Latitude\\\",\\n \\\"AADNonInteractiveUserSignInLogs\\\", \\\"DeviceDetail\\\", \\\"OSPlatform\\\",\\n \\\"AADNonInteractiveUserSignInLogs\\\", \\\"DeviceDetail.operatingSystem\\\", \\\"OSPlatform\\\",\\n \\\"AADNonInteractiveUserSignInLogs\\\", \\\"DeviceDetail.browser\\\", \\\"Browser\\\",\\n \\\"AADNonInteractiveUserSignInLogs\\\", \\\"DeviceDetail.deviceId\\\", \\\"EntraIdDeviceId\\\",\\n \\\"AADNonInteractiveUserSignInLogs\\\", \\\"DeviceDetail.displayName\\\", \\\"DeviceName\\\",\\n \\\"AADNonInteractiveUserSignInLogs\\\", \\\"DeviceDetail.isCompliant\\\", \\\"IsCompliant\\\",\\n \\\"AADNonInteractiveUserSignInLogs\\\", \\\"DeviceDetail.isManaged\\\", \\\"IsManaged\\\",\\n \\\"AADNonInteractiveUserSignInLogs\\\", \\\"DeviceDetail.trustType\\\", \\\"DeviceTrustType\\\",\\n \\\"AADNonInteractiveUserSignInLogs\\\", \\\"RiskEventTypes_V2\\\", \\\"RiskEventTypes\\\",\\n \\\"AADNonInteractiveUserSignInLogs\\\", \\\"UserType\\\", \\\"IsGuestUser\\\",\\n \\\"AADNonInteractiveUserSignInLogs\\\", \\\"ResourceIdentity\\\", \\\"ResourceId\\\",\\n \\\"AADNonInteractiveUserSignInLogs\\\", \\\"UniqueTokenIdentifier\\\", \\\"UniqueTokenId\\\",\\n \\\"AADNonInteractiveUserSignInLogs\\\", \\\"Id\\\", \\\"RequestId\\\",\\n \\\"AADNonInteractiveUserSignInLogs\\\", \\\"IsThroughGlobalSecureAccess\\\", \\\"IsSignInThroughGlobalSecureAccess\\\",\\n \\\"AADNonInteractiveUserSignInLogs\\\", \\\"CreatedDateTime\\\", \\\"Timestamp\\\",\\n \\\"AADNonInteractiveUserSignInLogs\\\", \\\"AADTenantId\\\", \\\"TenantId\\\",\\n \\\"AADServicePrincipalSignInLogs\\\", \\\"AppId\\\", \\\"ApplicationId\\\",\\n \\\"AADServicePrincipalSignInLogs\\\", \\\"AppDisplayName\\\", \\\"Application\\\",\\n \\\"AADServicePrincipalSignInLogs\\\", \\\"Identity\\\", \\\"ServicePrincipalName\\\",\\n \\\"AADServicePrincipalSignInLogs\\\", \\\"ResultType\\\", \\\"ErrorCode\\\",\\n \\\"AADServicePrincipalSignInLogs\\\", \\\"Location\\\", \\\"Country\\\",\\n \\\"AADServicePrincipalSignInLogs\\\", \\\"LocationDetails\\\", \\\"City\\\",\\n \\\"AADServicePrincipalSignInLogs\\\", \\\"LocationDetails.city\\\", \\\"City\\\",\\n \\\"AADServicePrincipalSignInLogs\\\", \\\"LocationDetails.state\\\", \\\"State\\\",\\n \\\"AADServicePrincipalSignInLogs\\\", \\\"LocationDetails.countryOrRegion\\\", \\\"Country\\\",\\n \\\"AADServicePrincipalSignInLogs\\\", \\\"LocationDetails.geoCoordinates\\\", \\\"Latitude\\\",\\n \\\"AADServicePrincipalSignInLogs\\\", \\\"ResourceIdentity\\\", \\\"ResourceId\\\",\\n \\\"AADServicePrincipalSignInLogs\\\", \\\"Id\\\", \\\"RequestId\\\",\\n \\\"AADServicePrincipalSignInLogs\\\", \\\"UniqueTokenIdentifier\\\", \\\"UniqueTokenId\\\",\\n \\\"AADServicePrincipalSignInLogs\\\", \\\"CreatedDateTime\\\", \\\"Timestamp\\\",\\n \\\"AADServicePrincipalSignInLogs\\\", \\\"AADTenantId\\\", \\\"TenantId\\\",\\n \\\"AADManagedIdentitySignInLogs\\\", \\\"AppId\\\", \\\"ApplicationId\\\",\\n \\\"AADManagedIdentitySignInLogs\\\", \\\"AppDisplayName\\\", \\\"Application\\\",\\n \\\"AADManagedIdentitySignInLogs\\\", \\\"Identity\\\", \\\"ServicePrincipalName\\\",\\n \\\"AADManagedIdentitySignInLogs\\\", \\\"ResultType\\\", \\\"ErrorCode\\\",\\n \\\"AADManagedIdentitySignInLogs\\\", \\\"Location\\\", \\\"Country\\\",\\n \\\"AADManagedIdentitySignInLogs\\\", \\\"LocationDetails\\\", \\\"City\\\",\\n \\\"AADManagedIdentitySignInLogs\\\", \\\"LocationDetails.city\\\", \\\"City\\\",\\n \\\"AADManagedIdentitySignInLogs\\\", \\\"LocationDetails.state\\\", \\\"State\\\",\\n \\\"AADManagedIdentitySignInLogs\\\", \\\"LocationDetails.countryOrRegion\\\", \\\"Country\\\",\\n \\\"AADManagedIdentitySignInLogs\\\", \\\"LocationDetails.geoCoordinates\\\", \\\"Latitude\\\",\\n \\\"AADManagedIdentitySignInLogs\\\", \\\"ResourceIdentity\\\", \\\"ResourceId\\\",\\n \\\"AADManagedIdentitySignInLogs\\\", \\\"Id\\\", \\\"RequestId\\\",\\n \\\"AADManagedIdentitySignInLogs\\\", \\\"UniqueTokenIdentifier\\\", \\\"UniqueTokenId\\\",\\n \\\"AADManagedIdentitySignInLogs\\\", \\\"CreatedDateTime\\\", \\\"Timestamp\\\",\\n \\\"AADManagedIdentitySignInLogs\\\", \\\"AADTenantId\\\", \\\"TenantId\\\",\\n \\\"MicrosoftGraphActivityLogs\\\", \\\"AppId\\\", \\\"ApplicationId\\\",\\n \\\"MicrosoftGraphActivityLogs\\\", \\\"UserId\\\", \\\"AccountObjectId\\\",\\n \\\"MicrosoftGraphActivityLogs\\\", \\\"IPAddress\\\", \\\"IpAddress\\\",\\n \\\"MicrosoftGraphActivityLogs\\\", \\\"DurationMs\\\", \\\"RequestDuration\\\",\\n \\\"MicrosoftGraphActivityLogs\\\", \\\"ResponseSizeBytes\\\", \\\"ResponseSize\\\",\\n \\\"MicrosoftGraphActivityLogs\\\", \\\"UniqueTokenId\\\", \\\"UniqueTokenIdentifier\\\",\\n \\\"MicrosoftGraphActivityLogs\\\", \\\"AadTenantId\\\", \\\"TenantId\\\"];\\nlet ValidRenames = Renames\\n| join kind=inner (Mapping | project SourceTable, TargetTable) on SourceTable\\n| join kind=inner (Schema | project TargetTable = T, TargetColumn = ColumnName) on TargetTable, TargetColumn\\n| project Src = SourceTable, SourceColumn, TargetColumn;\\nlet Ignore = dynamic([\\\"OperationName\\\", \\\"Category\\\", \\\"OperationVersion\\\", \\\"Level\\\", \\\"Resource\\\", \\\"ResourceGroup\\\", \\\"ResourceProvider\\\", \\\"SourceSystem\\\", \\\"Type\\\", \\\"TenantId\\\"]);\\nlet TextColumns = dynamic([\\\"ResultDescription\\\", \\\"ResultSignature\\\"]);\\nlet RuleBase = print R = Rules\\n| mv-expand R\\n| extend RuleId = tostring(R.name), Kind = tostring(R.kind), Name = tostring(R.properties.displayName), Enabled = tobool(R.properties.enabled),\\n         Severity = tostring(R.properties.severity), Query = tostring(R.properties.query)\\n| where Kind in (\\\"Scheduled\\\", \\\"NRT\\\") and isnotempty(Query)\\n| where \\\"{Scope}\\\" == \\\"all\\\" or Enabled\\n| extend Q = replace_regex(Query, @\\\"(^|[^:])//[^\\\\n]*\\\", @\\\"\\\\1\\\")\\n| extend SourceTables = set_union(extract_all(@\\\"\\\\b(SigninLogs|AADNonInteractiveUserSignInLogs|AADServicePrincipalSignInLogs|AADManagedIdentitySignInLogs|AuditLogs|MicrosoftGraphActivityLogs)\\\\b\\\", Q), dynamic([]))\\n| where array_length(SourceTables) > 0\\n| extend Tokens = set_union(extract_all(@\\\"\\\\b([A-Za-z_]\\\\w*(?:\\\\.[A-Za-z_]\\\\w*)*)\\\\b\\\", replace_regex(Q, @\\\"\\\"\\\"[^\\\"\\\"]*\\\"\\\"|'[^']*'\\\", \\\"''\\\")), dynamic([]))\\n| project-away R, Query;\\nlet Missing = RuleBase\\n| project RuleId, SourceTables, Tokens\\n| mv-expand Src = SourceTables to typeof(string)\\n| join kind=inner (Mapping | project Src = SourceTable, Target = TargetTable) on Src\\n| mv-expand Tok = Tokens to typeof(string)\\n| extend Root = tostring(split(Tok, \\\".\\\")[0]), Dotted = indexof(Tok, \\\".\\\") >= 0\\n| where Root !in (Ignore) and Root !in (TextColumns)\\n| join kind=inner (Schema | project Src = T, Root = ColumnName) on Src, Root\\n| join kind=leftouter (Schema | project Target = T, Root = ColumnName, InTarget = true) on Target, Root\\n| join kind=leftouter (ValidRenames | project Src, Tok = SourceColumn, RenFull = TargetColumn) on Src, Tok\\n| join kind=leftouter (ValidRenames | project Src, Root = SourceColumn, RenRoot = TargetColumn) on Src, Root\\n| where not(isnotempty(RenFull) or coalesce(InTarget, false) or (not(Dotted) and isnotempty(RenRoot)))\\n| extend Leaf = tostring(split(Tok, \\\".\\\")[-1])\\n| mv-expand Nm = pack_array(Tok, Root, Leaf) to typeof(string)\\n| summarize MissingCols = make_set(Tok), MissingNames = make_set(Nm) by RuleId;\\nlet RuleList = RuleBase\\n| join kind=leftouter Missing on RuleId\\n| extend MissingCols = iff(isnull(MissingCols), dynamic([]), MissingCols), MissingNames = iff(isnull(MissingNames), dynamic([]), MissingNames)\\n| extend ResultTypeFilter = Q matches regex @\\\"\\\\bResultType\\\\b\\\\s*(==|in)\\\",\\n         StringCompares = Q matches regex @'(ResultType|RiskLevel\\\\w*|RiskState|ConditionalAccessStatus)\\\\s*(==|!=|=~|!~|in~?\\\\s*\\\\()\\\\s*[\\\"'']',\\n         SplitsByType = Q matches regex @\\\"\\\\bby\\\\b[^|]*\\\\bType\\\\b\\\"\\n| mv-apply A = extract_all(@\\\"\\\\b(\\\\w+)\\\\s*=\\\\s*([^,=\\\\n|]+)\\\", Q) on (\\n    extend Nm = tostring(A[0]), Rhs = extract_all(@\\\"(\\\\w+)\\\", tostring(A[1]))\\n    | where array_length(set_intersect(Rhs, MissingNames)) > 0\\n    | summarize Aliases = make_set(Nm)\\n  )\\n| extend Names = set_union(MissingNames, Aliases)\\n| mv-apply P = extract_all(@\\\"\\\\b(\\\\w+)\\\\b\\\\)?\\\\s*(!?has_any|!?has_all|!?has_cs|!?has|!?contains|!?startswith|!?endswith|!?in~?|==|=~|!=|!~|matches regex)\\\\s*(.)\\\", Q) on (\\n    extend N = tostring(P[0]), Op = tostring(P[1]), Nx = tostring(P[2])\\n    | extend IsMissing = set_has_element(Names, N) and N !in (TextColumns),\\n             IsText = N in (TextColumns),\\n             Neg = Op startswith \\\"!\\\", Lit = Nx matches regex @'[(\\\"''0-9]'\\n    | summarize FilterMissing = make_set_if(N, IsMissing and (not(Neg) or not(Lit))),\\n                ExcludeMissing = make_set_if(N, IsMissing and Neg and Lit),\\n                FilterText = make_set_if(N, IsText and not(Neg)),\\n                ExcludeText = make_set_if(N, IsText and Neg),\\n                FuzzyText = countif(IsText and not(Neg) and Op !in (\\\"==\\\", \\\"=~\\\", \\\"in\\\", \\\"in~\\\"))\\n  )\\n| project-away Q, Tokens, MissingNames, Aliases, Names, RuleId1;\\nlet Volume = union withsource=Table isfuzzy=true SigninLogs, AADNonInteractiveUserSignInLogs, AADServicePrincipalSignInLogs, AADManagedIdentitySignInLogs,\\n    AuditLogs, MicrosoftGraphActivityLogs, EntraIdSignInEvents, EntraIdSpnSignInEvents, GraphAPIAuditEvents, EntraIdDirectoryAuditEvents\\n| where coalesce(Timestamp, TimeGenerated) > ago(LookbackDays * 1d)\\n| summarize Rows = count(), LastEvent = max(coalesce(Timestamp, TimeGenerated)) by Table;\\nlet AuditTargetRows = toscalar(union isfuzzy=true (print n = 0), (EntraIdDirectoryAuditEvents | where Timestamp > ago(LookbackDays * 1d) | summarize n = count()) | summarize sum(n));\\nlet Assessed = RuleList\\n| mv-expand Src = SourceTables to typeof(string)\\n| join kind=leftouter Mapping on $left.Src == $right.SourceTable\\n| extend SrcRows = long(null), TgtRows = long(null)\\n| summarize Sources = strcat_array(make_set(Src), \\\", \\\"), Targets = strcat_array(make_set_if(TargetTable, isnotempty(TargetTable)), \\\", \\\"),\\n            SourcesWithoutData = countif(coalesce(SrcRows, 0) == 0),\\n            UsesAudit = countif(Src == \\\"AuditLogs\\\"),\\n            TargetsWithoutData = countif(Src != \\\"AuditLogs\\\" and coalesce(TgtRows, 0) == 0)\\n    by Name, Enabled, Severity, Kind,\\n       FilterMissing = strcat_array(FilterMissing, \\\", \\\"), ExcludeMissing = strcat_array(ExcludeMissing, \\\", \\\"), MissingCols = strcat_array(MissingCols, \\\", \\\"),\\n       FilterText = strcat_array(FilterText, \\\", \\\"), ExcludeText = strcat_array(ExcludeText, \\\", \\\"), FuzzyText,\\n       ResultTypeFilter, StringCompares, SplitsByType\\n| extend AuditPending = UsesAudit > 0 and AuditTargetRows == 0, AuditReady = UsesAudit > 0 and AuditTargetRows > 0\\n| extend Assessment = case(AuditPending, \\\"Needs AuditLogs\\\",\\n                           isnotempty(FilterMissing), \\\"Not convertible\\\",\\n                           isnotempty(ExcludeMissing) or isnotempty(ExcludeText), \\\"Less precise\\\",\\n                           isnotempty(FilterText) and FuzzyText == 0 and ResultTypeFilter, \\\"Review\\\",\\n                           isnotempty(FilterText), \\\"Less precise\\\",\\n                           \\\"Convertible\\\")\\n| extend Notes = strcat_array(set_difference(pack_array(\\n             iff(AuditPending, \\\"AuditLogs: EntraIdDirectoryAuditEvents has no data in your tenant yet\\\", \\\"\\\"),\\n             iff(AuditReady, \\\"EntraIdDirectoryAuditEvents has data: columns checked against its schema, ISOC coverage still to confirm\\\", \\\"\\\"),\\n             iff(isnotempty(FilterMissing) and not(AuditPending), strcat(\\\"Core logic filters on \\\", FilterMissing, \\\", not available in \\\", Targets, \\\" (missing: \\\", MissingCols, \\\")\\\"), \\\"\\\"),\\n             iff(isnotempty(ExcludeMissing) and not(AuditPending), strcat(\\\"Exclusion on \\\", ExcludeMissing, \\\" can't be reproduced\\\"), \\\"\\\"),\\n             iff(isnotempty(ExcludeText), strcat(\\\"Exclusion on text column can't be reproduced: \\\", ExcludeText), \\\"\\\"),\\n             iff(isnotempty(FilterText) and FuzzyText == 0 and ResultTypeFilter, strcat(\\\"Exact match on \\\", FilterText, \\\": check whether the ErrorCode filter already covers it\\\"), \\\"\\\"),\\n             iff(isnotempty(FilterText) and not(FuzzyText == 0 and ResultTypeFilter), strcat(\\\"Text search on \\\", FilterText, \\\" is lost\\\"), \\\"\\\"),\\n             iff(isnotempty(MissingCols) and isempty(FilterMissing) and isempty(ExcludeMissing) and not(AuditPending), strcat(\\\"Missing in target, used only in output: \\\", MissingCols), \\\"\\\"),\\n             iff(StringCompares, \\\"Compares ResultType, risk or CA status as text: convert to int\\\", \\\"\\\"),\\n             iff(SplitsByType, \\\"Groups by Type: interactive and non-interactive are one table in Defender XDR\\\", \\\"\\\")), dynamic([\\\"\\\"])), \\\" \\u00b7 \\\")\\n| extend SourceData = iff(SourcesWithoutData == 0, \\\"Data\\\", \\\"No data\\\"),\\n         TargetData = case(TargetsWithoutData > 0, \\\"No data\\\", AuditPending, \\\"Audit table missing\\\", \\\"Data\\\");\\nAssessed\\n| summarize Rules = count() by Assessment\\n| extend Order = case(Assessment == \\\"Convertible\\\", 1, Assessment == \\\"Less precise\\\", 2, Assessment == \\\"Review\\\", 3, Assessment == \\\"Not convertible\\\", 4, 5)\\n| order by Order asc\", \"selectedWorkspaceIds\": [\"{WorkspaceId}\"]}",
+        "size": 1,
+        "queryType": "advancedHunting",
+        "crossComponentResources": [
+          "{Workspace}"
+        ],
+        "visualization": "tiles",
+        "tileSettings": {
+          "titleContent": {
+            "columnMatch": "Assessment",
+            "formatter": 18,
+            "formatOptions": {
+              "thresholdsOptions": "icons",
+              "thresholdsGrid": [
+                {
+                  "operator": "==",
+                  "thresholdValue": "Convertible",
+                  "representation": "success",
+                  "text": "{0}{1}"
+                },
+                {
+                  "operator": "==",
+                  "thresholdValue": "Less precise",
+                  "representation": "2",
+                  "text": "{0}{1}"
+                },
+                {
+                  "operator": "==",
+                  "thresholdValue": "Review",
+                  "representation": "2",
+                  "text": "{0}{1}"
+                },
+                {
+                  "operator": "==",
+                  "thresholdValue": "Not convertible",
+                  "representation": "4",
+                  "text": "{0}{1}"
+                },
+                {
+                  "operator": "==",
+                  "thresholdValue": "Needs AuditLogs",
+                  "representation": "stopped",
+                  "text": "{0}{1}"
+                },
+                {
+                  "operator": "Default",
+                  "thresholdValue": null,
+                  "representation": "unknown",
+                  "text": "{0}{1}"
+                }
+              ]
+            }
+          },
+          "leftContent": {
+            "columnMatch": "Rules",
+            "formatter": 12,
+            "formatOptions": {
+              "palette": "blue"
+            },
+            "numberFormat": {
+              "unit": 17,
+              "options": {
+                "style": "decimal",
+                "maximumFractionDigits": 0
+              }
+            }
+          },
+          "showBorder": true,
+          "size": "auto"
+        },
+        "title": "Rules by assessment"
+      },
+      "name": "tiles"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "{\"__advancedHuntingSettings\": true, \"query\": \"let LookbackDays = {Lookback};\\nlet Rules = parse_json(```{Rules:escapejson}```);\\nlet Mapping = datatable(SourceTable:string, TargetTable:string, Coverage:string)[\\n \\\"SigninLogs\\\", \\\"EntraIdSignInEvents\\\", \\\"Included in ISOC\\\",\\n \\\"AADNonInteractiveUserSignInLogs\\\", \\\"EntraIdSignInEvents\\\", \\\"Included in ISOC\\\",\\n \\\"AADServicePrincipalSignInLogs\\\", \\\"EntraIdSpnSignInEvents\\\", \\\"Included in ISOC\\\",\\n \\\"AADManagedIdentitySignInLogs\\\", \\\"EntraIdSpnSignInEvents\\\", \\\"Included in ISOC\\\",\\n \\\"MicrosoftGraphActivityLogs\\\", \\\"GraphAPIAuditEvents\\\", \\\"Included in ISOC\\\",\\n \\\"AuditLogs\\\", \\\"EntraIdDirectoryAuditEvents\\\", \\\"Not on ISOC list\\\"];\\nlet Schema = union isfuzzy=true\\n    (SigninLogs | getschema | project T = \\\"SigninLogs\\\", ColumnName),\\n    (AADNonInteractiveUserSignInLogs | getschema | project T = \\\"AADNonInteractiveUserSignInLogs\\\", ColumnName),\\n    (AADServicePrincipalSignInLogs | getschema | project T = \\\"AADServicePrincipalSignInLogs\\\", ColumnName),\\n    (AADManagedIdentitySignInLogs | getschema | project T = \\\"AADManagedIdentitySignInLogs\\\", ColumnName),\\n    (AuditLogs | getschema | project T = \\\"AuditLogs\\\", ColumnName),\\n    (MicrosoftGraphActivityLogs | getschema | project T = \\\"MicrosoftGraphActivityLogs\\\", ColumnName),\\n    (EntraIdSignInEvents | getschema | project T = \\\"EntraIdSignInEvents\\\", ColumnName),\\n    (EntraIdSpnSignInEvents | getschema | project T = \\\"EntraIdSpnSignInEvents\\\", ColumnName),\\n    (GraphAPIAuditEvents | getschema | project T = \\\"GraphAPIAuditEvents\\\", ColumnName),\\n    (EntraIdDirectoryAuditEvents | getschema | project T = \\\"EntraIdDirectoryAuditEvents\\\", ColumnName);\\nlet Renames = datatable(SourceTable:string, SourceColumn:string, TargetColumn:string)[\\n \\\"SigninLogs\\\", \\\"UserPrincipalName\\\", \\\"AccountUpn\\\",\\n \\\"SigninLogs\\\", \\\"UserDisplayName\\\", \\\"AccountDisplayName\\\",\\n \\\"SigninLogs\\\", \\\"Identity\\\", \\\"AccountDisplayName\\\",\\n \\\"SigninLogs\\\", \\\"UserId\\\", \\\"AccountObjectId\\\",\\n \\\"SigninLogs\\\", \\\"AppDisplayName\\\", \\\"Application\\\",\\n \\\"SigninLogs\\\", \\\"AppId\\\", \\\"ApplicationId\\\",\\n \\\"SigninLogs\\\", \\\"ResultType\\\", \\\"ErrorCode\\\",\\n \\\"SigninLogs\\\", \\\"Status.errorCode\\\", \\\"ErrorCode\\\",\\n \\\"SigninLogs\\\", \\\"Location\\\", \\\"Country\\\",\\n \\\"SigninLogs\\\", \\\"LocationDetails\\\", \\\"City\\\",\\n \\\"SigninLogs\\\", \\\"LocationDetails.city\\\", \\\"City\\\",\\n \\\"SigninLogs\\\", \\\"LocationDetails.state\\\", \\\"State\\\",\\n \\\"SigninLogs\\\", \\\"LocationDetails.countryOrRegion\\\", \\\"Country\\\",\\n \\\"SigninLogs\\\", \\\"LocationDetails.geoCoordinates\\\", \\\"Latitude\\\",\\n \\\"SigninLogs\\\", \\\"DeviceDetail\\\", \\\"OSPlatform\\\",\\n \\\"SigninLogs\\\", \\\"DeviceDetail.operatingSystem\\\", \\\"OSPlatform\\\",\\n \\\"SigninLogs\\\", \\\"DeviceDetail.browser\\\", \\\"Browser\\\",\\n \\\"SigninLogs\\\", \\\"DeviceDetail.deviceId\\\", \\\"EntraIdDeviceId\\\",\\n \\\"SigninLogs\\\", \\\"DeviceDetail.displayName\\\", \\\"DeviceName\\\",\\n \\\"SigninLogs\\\", \\\"DeviceDetail.isCompliant\\\", \\\"IsCompliant\\\",\\n \\\"SigninLogs\\\", \\\"DeviceDetail.isManaged\\\", \\\"IsManaged\\\",\\n \\\"SigninLogs\\\", \\\"DeviceDetail.trustType\\\", \\\"DeviceTrustType\\\",\\n \\\"SigninLogs\\\", \\\"RiskEventTypes_V2\\\", \\\"RiskEventTypes\\\",\\n \\\"SigninLogs\\\", \\\"UserType\\\", \\\"IsGuestUser\\\",\\n \\\"SigninLogs\\\", \\\"ResourceIdentity\\\", \\\"ResourceId\\\",\\n \\\"SigninLogs\\\", \\\"UniqueTokenIdentifier\\\", \\\"UniqueTokenId\\\",\\n \\\"SigninLogs\\\", \\\"Id\\\", \\\"RequestId\\\",\\n \\\"SigninLogs\\\", \\\"IsThroughGlobalSecureAccess\\\", \\\"IsSignInThroughGlobalSecureAccess\\\",\\n \\\"SigninLogs\\\", \\\"CreatedDateTime\\\", \\\"Timestamp\\\",\\n \\\"SigninLogs\\\", \\\"AADTenantId\\\", \\\"TenantId\\\",\\n \\\"AADNonInteractiveUserSignInLogs\\\", \\\"UserPrincipalName\\\", \\\"AccountUpn\\\",\\n \\\"AADNonInteractiveUserSignInLogs\\\", \\\"UserDisplayName\\\", \\\"AccountDisplayName\\\",\\n \\\"AADNonInteractiveUserSignInLogs\\\", \\\"Identity\\\", \\\"AccountDisplayName\\\",\\n \\\"AADNonInteractiveUserSignInLogs\\\", \\\"UserId\\\", \\\"AccountObjectId\\\",\\n \\\"AADNonInteractiveUserSignInLogs\\\", \\\"AppDisplayName\\\", \\\"Application\\\",\\n \\\"AADNonInteractiveUserSignInLogs\\\", \\\"AppId\\\", \\\"ApplicationId\\\",\\n \\\"AADNonInteractiveUserSignInLogs\\\", \\\"ResultType\\\", \\\"ErrorCode\\\",\\n \\\"AADNonInteractiveUserSignInLogs\\\", \\\"Status.errorCode\\\", \\\"ErrorCode\\\",\\n \\\"AADNonInteractiveUserSignInLogs\\\", \\\"Location\\\", \\\"Country\\\",\\n \\\"AADNonInteractiveUserSignInLogs\\\", \\\"LocationDetails\\\", \\\"City\\\",\\n \\\"AADNonInteractiveUserSignInLogs\\\", \\\"LocationDetails.city\\\", \\\"City\\\",\\n \\\"AADNonInteractiveUserSignInLogs\\\", \\\"LocationDetails.state\\\", \\\"State\\\",\\n \\\"AADNonInteractiveUserSignInLogs\\\", \\\"LocationDetails.countryOrRegion\\\", \\\"Country\\\",\\n \\\"AADNonInteractiveUserSignInLogs\\\", \\\"LocationDetails.geoCoordinates\\\", \\\"Latitude\\\",\\n \\\"AADNonInteractiveUserSignInLogs\\\", \\\"DeviceDetail\\\", \\\"OSPlatform\\\",\\n \\\"AADNonInteractiveUserSignInLogs\\\", \\\"DeviceDetail.operatingSystem\\\", \\\"OSPlatform\\\",\\n \\\"AADNonInteractiveUserSignInLogs\\\", \\\"DeviceDetail.browser\\\", \\\"Browser\\\",\\n \\\"AADNonInteractiveUserSignInLogs\\\", \\\"DeviceDetail.deviceId\\\", \\\"EntraIdDeviceId\\\",\\n \\\"AADNonInteractiveUserSignInLogs\\\", \\\"DeviceDetail.displayName\\\", \\\"DeviceName\\\",\\n \\\"AADNonInteractiveUserSignInLogs\\\", \\\"DeviceDetail.isCompliant\\\", \\\"IsCompliant\\\",\\n \\\"AADNonInteractiveUserSignInLogs\\\", \\\"DeviceDetail.isManaged\\\", \\\"IsManaged\\\",\\n \\\"AADNonInteractiveUserSignInLogs\\\", \\\"DeviceDetail.trustType\\\", \\\"DeviceTrustType\\\",\\n \\\"AADNonInteractiveUserSignInLogs\\\", \\\"RiskEventTypes_V2\\\", \\\"RiskEventTypes\\\",\\n \\\"AADNonInteractiveUserSignInLogs\\\", \\\"UserType\\\", \\\"IsGuestUser\\\",\\n \\\"AADNonInteractiveUserSignInLogs\\\", \\\"ResourceIdentity\\\", \\\"ResourceId\\\",\\n \\\"AADNonInteractiveUserSignInLogs\\\", \\\"UniqueTokenIdentifier\\\", \\\"UniqueTokenId\\\",\\n \\\"AADNonInteractiveUserSignInLogs\\\", \\\"Id\\\", \\\"RequestId\\\",\\n \\\"AADNonInteractiveUserSignInLogs\\\", \\\"IsThroughGlobalSecureAccess\\\", \\\"IsSignInThroughGlobalSecureAccess\\\",\\n \\\"AADNonInteractiveUserSignInLogs\\\", \\\"CreatedDateTime\\\", \\\"Timestamp\\\",\\n \\\"AADNonInteractiveUserSignInLogs\\\", \\\"AADTenantId\\\", \\\"TenantId\\\",\\n \\\"AADServicePrincipalSignInLogs\\\", \\\"AppId\\\", \\\"ApplicationId\\\",\\n \\\"AADServicePrincipalSignInLogs\\\", \\\"AppDisplayName\\\", \\\"Application\\\",\\n \\\"AADServicePrincipalSignInLogs\\\", \\\"Identity\\\", \\\"ServicePrincipalName\\\",\\n \\\"AADServicePrincipalSignInLogs\\\", \\\"ResultType\\\", \\\"ErrorCode\\\",\\n \\\"AADServicePrincipalSignInLogs\\\", \\\"Location\\\", \\\"Country\\\",\\n \\\"AADServicePrincipalSignInLogs\\\", \\\"LocationDetails\\\", \\\"City\\\",\\n \\\"AADServicePrincipalSignInLogs\\\", \\\"LocationDetails.city\\\", \\\"City\\\",\\n \\\"AADServicePrincipalSignInLogs\\\", \\\"LocationDetails.state\\\", \\\"State\\\",\\n \\\"AADServicePrincipalSignInLogs\\\", \\\"LocationDetails.countryOrRegion\\\", \\\"Country\\\",\\n \\\"AADServicePrincipalSignInLogs\\\", \\\"LocationDetails.geoCoordinates\\\", \\\"Latitude\\\",\\n \\\"AADServicePrincipalSignInLogs\\\", \\\"ResourceIdentity\\\", \\\"ResourceId\\\",\\n \\\"AADServicePrincipalSignInLogs\\\", \\\"Id\\\", \\\"RequestId\\\",\\n \\\"AADServicePrincipalSignInLogs\\\", \\\"UniqueTokenIdentifier\\\", \\\"UniqueTokenId\\\",\\n \\\"AADServicePrincipalSignInLogs\\\", \\\"CreatedDateTime\\\", \\\"Timestamp\\\",\\n \\\"AADServicePrincipalSignInLogs\\\", \\\"AADTenantId\\\", \\\"TenantId\\\",\\n \\\"AADManagedIdentitySignInLogs\\\", \\\"AppId\\\", \\\"ApplicationId\\\",\\n \\\"AADManagedIdentitySignInLogs\\\", \\\"AppDisplayName\\\", \\\"Application\\\",\\n \\\"AADManagedIdentitySignInLogs\\\", \\\"Identity\\\", \\\"ServicePrincipalName\\\",\\n \\\"AADManagedIdentitySignInLogs\\\", \\\"ResultType\\\", \\\"ErrorCode\\\",\\n \\\"AADManagedIdentitySignInLogs\\\", \\\"Location\\\", \\\"Country\\\",\\n \\\"AADManagedIdentitySignInLogs\\\", \\\"LocationDetails\\\", \\\"City\\\",\\n \\\"AADManagedIdentitySignInLogs\\\", \\\"LocationDetails.city\\\", \\\"City\\\",\\n \\\"AADManagedIdentitySignInLogs\\\", \\\"LocationDetails.state\\\", \\\"State\\\",\\n \\\"AADManagedIdentitySignInLogs\\\", \\\"LocationDetails.countryOrRegion\\\", \\\"Country\\\",\\n \\\"AADManagedIdentitySignInLogs\\\", \\\"LocationDetails.geoCoordinates\\\", \\\"Latitude\\\",\\n \\\"AADManagedIdentitySignInLogs\\\", \\\"ResourceIdentity\\\", \\\"ResourceId\\\",\\n \\\"AADManagedIdentitySignInLogs\\\", \\\"Id\\\", \\\"RequestId\\\",\\n \\\"AADManagedIdentitySignInLogs\\\", \\\"UniqueTokenIdentifier\\\", \\\"UniqueTokenId\\\",\\n \\\"AADManagedIdentitySignInLogs\\\", \\\"CreatedDateTime\\\", \\\"Timestamp\\\",\\n \\\"AADManagedIdentitySignInLogs\\\", \\\"AADTenantId\\\", \\\"TenantId\\\",\\n \\\"MicrosoftGraphActivityLogs\\\", \\\"AppId\\\", \\\"ApplicationId\\\",\\n \\\"MicrosoftGraphActivityLogs\\\", \\\"UserId\\\", \\\"AccountObjectId\\\",\\n \\\"MicrosoftGraphActivityLogs\\\", \\\"IPAddress\\\", \\\"IpAddress\\\",\\n \\\"MicrosoftGraphActivityLogs\\\", \\\"DurationMs\\\", \\\"RequestDuration\\\",\\n \\\"MicrosoftGraphActivityLogs\\\", \\\"ResponseSizeBytes\\\", \\\"ResponseSize\\\",\\n \\\"MicrosoftGraphActivityLogs\\\", \\\"UniqueTokenId\\\", \\\"UniqueTokenIdentifier\\\",\\n \\\"MicrosoftGraphActivityLogs\\\", \\\"AadTenantId\\\", \\\"TenantId\\\"];\\nlet ValidRenames = Renames\\n| join kind=inner (Mapping | project SourceTable, TargetTable) on SourceTable\\n| join kind=inner (Schema | project TargetTable = T, TargetColumn = ColumnName) on TargetTable, TargetColumn\\n| project Src = SourceTable, SourceColumn, TargetColumn;\\nlet Ignore = dynamic([\\\"OperationName\\\", \\\"Category\\\", \\\"OperationVersion\\\", \\\"Level\\\", \\\"Resource\\\", \\\"ResourceGroup\\\", \\\"ResourceProvider\\\", \\\"SourceSystem\\\", \\\"Type\\\", \\\"TenantId\\\"]);\\nlet TextColumns = dynamic([\\\"ResultDescription\\\", \\\"ResultSignature\\\"]);\\nlet RuleBase = print R = Rules\\n| mv-expand R\\n| extend RuleId = tostring(R.name), Kind = tostring(R.kind), Name = tostring(R.properties.displayName), Enabled = tobool(R.properties.enabled),\\n         Severity = tostring(R.properties.severity), Query = tostring(R.properties.query)\\n| where Kind in (\\\"Scheduled\\\", \\\"NRT\\\") and isnotempty(Query)\\n| where \\\"{Scope}\\\" == \\\"all\\\" or Enabled\\n| extend Q = replace_regex(Query, @\\\"(^|[^:])//[^\\\\n]*\\\", @\\\"\\\\1\\\")\\n| extend SourceTables = set_union(extract_all(@\\\"\\\\b(SigninLogs|AADNonInteractiveUserSignInLogs|AADServicePrincipalSignInLogs|AADManagedIdentitySignInLogs|AuditLogs|MicrosoftGraphActivityLogs)\\\\b\\\", Q), dynamic([]))\\n| where array_length(SourceTables) > 0\\n| extend Tokens = set_union(extract_all(@\\\"\\\\b([A-Za-z_]\\\\w*(?:\\\\.[A-Za-z_]\\\\w*)*)\\\\b\\\", replace_regex(Q, @\\\"\\\"\\\"[^\\\"\\\"]*\\\"\\\"|'[^']*'\\\", \\\"''\\\")), dynamic([]))\\n| project-away R, Query;\\nlet Missing = RuleBase\\n| project RuleId, SourceTables, Tokens\\n| mv-expand Src = SourceTables to typeof(string)\\n| join kind=inner (Mapping | project Src = SourceTable, Target = TargetTable) on Src\\n| mv-expand Tok = Tokens to typeof(string)\\n| extend Root = tostring(split(Tok, \\\".\\\")[0]), Dotted = indexof(Tok, \\\".\\\") >= 0\\n| where Root !in (Ignore) and Root !in (TextColumns)\\n| join kind=inner (Schema | project Src = T, Root = ColumnName) on Src, Root\\n| join kind=leftouter (Schema | project Target = T, Root = ColumnName, InTarget = true) on Target, Root\\n| join kind=leftouter (ValidRenames | project Src, Tok = SourceColumn, RenFull = TargetColumn) on Src, Tok\\n| join kind=leftouter (ValidRenames | project Src, Root = SourceColumn, RenRoot = TargetColumn) on Src, Root\\n| where not(isnotempty(RenFull) or coalesce(InTarget, false) or (not(Dotted) and isnotempty(RenRoot)))\\n| extend Leaf = tostring(split(Tok, \\\".\\\")[-1])\\n| mv-expand Nm = pack_array(Tok, Root, Leaf) to typeof(string)\\n| summarize MissingCols = make_set(Tok), MissingNames = make_set(Nm) by RuleId;\\nlet RuleList = RuleBase\\n| join kind=leftouter Missing on RuleId\\n| extend MissingCols = iff(isnull(MissingCols), dynamic([]), MissingCols), MissingNames = iff(isnull(MissingNames), dynamic([]), MissingNames)\\n| extend ResultTypeFilter = Q matches regex @\\\"\\\\bResultType\\\\b\\\\s*(==|in)\\\",\\n         StringCompares = Q matches regex @'(ResultType|RiskLevel\\\\w*|RiskState|ConditionalAccessStatus)\\\\s*(==|!=|=~|!~|in~?\\\\s*\\\\()\\\\s*[\\\"'']',\\n         SplitsByType = Q matches regex @\\\"\\\\bby\\\\b[^|]*\\\\bType\\\\b\\\"\\n| mv-apply A = extract_all(@\\\"\\\\b(\\\\w+)\\\\s*=\\\\s*([^,=\\\\n|]+)\\\", Q) on (\\n    extend Nm = tostring(A[0]), Rhs = extract_all(@\\\"(\\\\w+)\\\", tostring(A[1]))\\n    | where array_length(set_intersect(Rhs, MissingNames)) > 0\\n    | summarize Aliases = make_set(Nm)\\n  )\\n| extend Names = set_union(MissingNames, Aliases)\\n| mv-apply P = extract_all(@\\\"\\\\b(\\\\w+)\\\\b\\\\)?\\\\s*(!?has_any|!?has_all|!?has_cs|!?has|!?contains|!?startswith|!?endswith|!?in~?|==|=~|!=|!~|matches regex)\\\\s*(.)\\\", Q) on (\\n    extend N = tostring(P[0]), Op = tostring(P[1]), Nx = tostring(P[2])\\n    | extend IsMissing = set_has_element(Names, N) and N !in (TextColumns),\\n             IsText = N in (TextColumns),\\n             Neg = Op startswith \\\"!\\\", Lit = Nx matches regex @'[(\\\"''0-9]'\\n    | summarize FilterMissing = make_set_if(N, IsMissing and (not(Neg) or not(Lit))),\\n                ExcludeMissing = make_set_if(N, IsMissing and Neg and Lit),\\n                FilterText = make_set_if(N, IsText and not(Neg)),\\n                ExcludeText = make_set_if(N, IsText and Neg),\\n                FuzzyText = countif(IsText and not(Neg) and Op !in (\\\"==\\\", \\\"=~\\\", \\\"in\\\", \\\"in~\\\"))\\n  )\\n| project-away Q, Tokens, MissingNames, Aliases, Names, RuleId1;\\nlet Volume = union withsource=Table isfuzzy=true SigninLogs, AADNonInteractiveUserSignInLogs, AADServicePrincipalSignInLogs, AADManagedIdentitySignInLogs,\\n    AuditLogs, MicrosoftGraphActivityLogs, EntraIdSignInEvents, EntraIdSpnSignInEvents, GraphAPIAuditEvents, EntraIdDirectoryAuditEvents\\n| where coalesce(Timestamp, TimeGenerated) > ago(LookbackDays * 1d)\\n| summarize Rows = count(), LastEvent = max(coalesce(Timestamp, TimeGenerated)) by Table;\\nlet AuditTargetRows = toscalar(union isfuzzy=true (print n = 0), (EntraIdDirectoryAuditEvents | where Timestamp > ago(LookbackDays * 1d) | summarize n = count()) | summarize sum(n));\\nlet Assessed = RuleList\\n| mv-expand Src = SourceTables to typeof(string)\\n| join kind=leftouter Mapping on $left.Src == $right.SourceTable\\n| join kind=leftouter (Volume | project Src = Table, SrcRows = Rows) on Src\\n| join kind=leftouter (Volume | project TargetTable = Table, TgtRows = Rows) on TargetTable\\n| summarize Sources = strcat_array(make_set(Src), \\\", \\\"), Targets = strcat_array(make_set_if(TargetTable, isnotempty(TargetTable)), \\\", \\\"),\\n            SourcesWithoutData = countif(coalesce(SrcRows, 0) == 0),\\n            UsesAudit = countif(Src == \\\"AuditLogs\\\"),\\n            TargetsWithoutData = countif(Src != \\\"AuditLogs\\\" and coalesce(TgtRows, 0) == 0)\\n    by Name, Enabled, Severity, Kind,\\n       FilterMissing = strcat_array(FilterMissing, \\\", \\\"), ExcludeMissing = strcat_array(ExcludeMissing, \\\", \\\"), MissingCols = strcat_array(MissingCols, \\\", \\\"),\\n       FilterText = strcat_array(FilterText, \\\", \\\"), ExcludeText = strcat_array(ExcludeText, \\\", \\\"), FuzzyText,\\n       ResultTypeFilter, StringCompares, SplitsByType\\n| extend AuditPending = UsesAudit > 0 and AuditTargetRows == 0, AuditReady = UsesAudit > 0 and AuditTargetRows > 0\\n| extend Assessment = case(AuditPending, \\\"Needs AuditLogs\\\",\\n                           isnotempty(FilterMissing), \\\"Not convertible\\\",\\n                           isnotempty(ExcludeMissing) or isnotempty(ExcludeText), \\\"Less precise\\\",\\n                           isnotempty(FilterText) and FuzzyText == 0 and ResultTypeFilter, \\\"Review\\\",\\n                           isnotempty(FilterText), \\\"Less precise\\\",\\n                           \\\"Convertible\\\")\\n| extend Notes = strcat_array(set_difference(pack_array(\\n             iff(AuditPending, \\\"AuditLogs: EntraIdDirectoryAuditEvents has no data in your tenant yet\\\", \\\"\\\"),\\n             iff(AuditReady, \\\"EntraIdDirectoryAuditEvents has data: columns checked against its schema, ISOC coverage still to confirm\\\", \\\"\\\"),\\n             iff(isnotempty(FilterMissing) and not(AuditPending), strcat(\\\"Core logic filters on \\\", FilterMissing, \\\", not available in \\\", Targets, \\\" (missing: \\\", MissingCols, \\\")\\\"), \\\"\\\"),\\n             iff(isnotempty(ExcludeMissing) and not(AuditPending), strcat(\\\"Exclusion on \\\", ExcludeMissing, \\\" can't be reproduced\\\"), \\\"\\\"),\\n             iff(isnotempty(ExcludeText), strcat(\\\"Exclusion on text column can't be reproduced: \\\", ExcludeText), \\\"\\\"),\\n             iff(isnotempty(FilterText) and FuzzyText == 0 and ResultTypeFilter, strcat(\\\"Exact match on \\\", FilterText, \\\": check whether the ErrorCode filter already covers it\\\"), \\\"\\\"),\\n             iff(isnotempty(FilterText) and not(FuzzyText == 0 and ResultTypeFilter), strcat(\\\"Text search on \\\", FilterText, \\\" is lost\\\"), \\\"\\\"),\\n             iff(isnotempty(MissingCols) and isempty(FilterMissing) and isempty(ExcludeMissing) and not(AuditPending), strcat(\\\"Missing in target, used only in output: \\\", MissingCols), \\\"\\\"),\\n             iff(StringCompares, \\\"Compares ResultType, risk or CA status as text: convert to int\\\", \\\"\\\"),\\n             iff(SplitsByType, \\\"Groups by Type: interactive and non-interactive are one table in Defender XDR\\\", \\\"\\\")), dynamic([\\\"\\\"])), \\\" \\u00b7 \\\")\\n| extend SourceData = iff(SourcesWithoutData == 0, \\\"Data\\\", \\\"No data\\\"),\\n         TargetData = case(TargetsWithoutData > 0, \\\"No data\\\", AuditPending, \\\"Audit table missing\\\", \\\"Data\\\");\\nlet Usage = RuleList | mv-expand Src = SourceTables to typeof(string) | summarize RulesUsingTable = count() by Src;\\nMapping\\n| join kind=leftouter (Volume | project SourceTable = Table, SourceRows = Rows, SourceLastEvent = LastEvent) on SourceTable\\n| join kind=leftouter (Volume | project TargetTable = Table, TargetRows = Rows, TargetLastEvent = LastEvent) on TargetTable\\n| join kind=leftouter (Usage | project SourceTable = Src, RulesUsingTable) on SourceTable\\n| project SourceTable, RulesUsingTable = coalesce(RulesUsingTable, 0), SourceRows = coalesce(SourceRows, 0), TargetTable = iff(isempty(TargetTable), \\\"-\\\", TargetTable), Coverage, TargetRows = coalesce(TargetRows, 0), TargetLastEvent\\n| order by RulesUsingTable desc\", \"selectedWorkspaceIds\": [\"{WorkspaceId}\"]}",
+        "size": 3,
+        "queryType": "advancedHunting",
+        "crossComponentResources": [
+          "{Workspace}"
+        ],
+        "title": "Classic Entra tables and their Defender XDR replacement",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "Coverage",
+              "formatter": 18,
+              "formatOptions": {
+                "thresholdsOptions": "icons",
+                "thresholdsGrid": [
+                  {
+                    "operator": "==",
+                    "thresholdValue": "Data",
+                    "representation": "success",
+                    "text": "{0}{1}"
+                  },
+                  {
+                    "operator": "==",
+                    "thresholdValue": "No data",
+                    "representation": "4",
+                    "text": "{0}{1}"
+                  },
+                  {
+                    "operator": "==",
+                    "thresholdValue": "Audit table missing",
+                    "representation": "stopped",
+                    "text": "{0}{1}"
+                  },
+                  {
+                    "operator": "==",
+                    "thresholdValue": "Included in ISOC",
+                    "representation": "success",
+                    "text": "{0}{1}"
+                  },
+                  {
+                    "operator": "==",
+                    "thresholdValue": "Not on ISOC list",
+                    "representation": "2",
+                    "text": "{0}{1}"
+                  },
+                  {
+                    "operator": "Default",
+                    "thresholdValue": null,
+                    "representation": "unknown",
+                    "text": "{0}{1}"
+                  }
+                ]
+              }
+            },
+            {
+              "columnMatch": "RulesUsingTable",
+              "formatter": 4,
+              "formatOptions": {
+                "palette": "blue"
+              }
+            }
+          ],
+          "labelSettings": [
+            {
+              "columnId": "SourceTable",
+              "label": "Classic table"
+            },
+            {
+              "columnId": "RulesUsingTable",
+              "label": "Rules"
+            },
+            {
+              "columnId": "SourceRows",
+              "label": "Rows (classic)"
+            },
+            {
+              "columnId": "TargetTable",
+              "label": "Defender XDR table"
+            },
+            {
+              "columnId": "Coverage",
+              "label": "ISOC"
+            },
+            {
+              "columnId": "TargetRows",
+              "label": "Rows (XDR)"
+            },
+            {
+              "columnId": "TargetLastEvent",
+              "label": "Last event (XDR)"
+            }
+          ]
+        }
+      },
+      "name": "tables"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "This table is a mapping, not a record comparison. It shows which Defender XDR table replaces each classic table, how many of your rules use it, and how many rows both tables received in the selected time range. It doesn't check whether individual sign-ins appear in both tables or whether their values match. For that, set **Record comparison** to *On*."
+      },
+      "name": "tables-note"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "{\"__advancedHuntingSettings\": true, \"query\": \"let From = ago(25h);\\nlet To = ago(1h);\\nlet Classic = union\\n    (SigninLogs | extend Dev = todynamic(DeviceDetail)),\\n    (AADNonInteractiveUserSignInLogs | extend Dev = todynamic(DeviceDetail))\\n| where TimeGenerated between (From .. To)\\n| summarize ClassicRows = count(), ClassicSuccess = countif(ResultType == \\\"0\\\") > 0,\\n            Interactive = take_any(Type == \\\"SigninLogs\\\"),\\n            CUpn = tolower(take_any(UserPrincipalName)), CApp = take_any(AppId),\\n            CCountry = take_any(Location), COs = take_any(tostring(Dev.operatingSystem)),\\n            CError = take_any(ResultType)\\n    by Id;\\nlet Xdr = EntraIdSignInEvents\\n| where Timestamp between (From .. To)\\n| summarize XdrRows = count(), XdrSuccess = countif(ErrorCode == 0) > 0,\\n            XUpn = tolower(take_any(AccountUpn)), XApp = take_any(ApplicationId),\\n            XCountry = take_any(Country), XOs = take_any(OSPlatform), XError = take_any(ErrorCode)\\n    by RequestId;\\nClassic\\n| join kind=fullouter Xdr on $left.Id == $right.RequestId\\n| extend Both = isnotempty(Id) and isnotempty(RequestId)\\n| extend SignInType = case(isempty(Id), \\\"Only in EntraIdSignInEvents\\\", Interactive, \\\"Interactive\\\", \\\"Non-interactive\\\")\\n| summarize InBoth = countif(Both), ClassicOnly = countif(isnotempty(Id) and isempty(RequestId)), XdrOnly = countif(isempty(Id)),\\n            Upn = countif(Both and CUpn == XUpn), App = countif(Both and CApp == XApp),\\n            Ctry = countif(Both and CCountry == XCountry), Os = countif(Both and COs == XOs),\\n            Err = countif(Both and ClassicRows == 1 and XdrRows == 1 and CError == tostring(XError)),\\n            ErrBase = countif(Both and ClassicRows == 1 and XdrRows == 1),\\n            SuccessClassic = countif(Both and ClassicSuccess), SuccessMissing = countif(Both and ClassicSuccess and not(XdrSuccess))\\n    by SignInType\\n| project SignInType, InBoth, ClassicOnly, XdrOnly,\\n          UpnMatch = iff(InBoth > 0, round(100.0 * Upn / InBoth, 1), real(null)), AppMatch = iff(InBoth > 0, round(100.0 * App / InBoth, 1), real(null)),\\n          CountryMatch = iff(InBoth > 0, round(100.0 * Ctry / InBoth, 1), real(null)), OsMatch = iff(InBoth > 0, round(100.0 * Os / InBoth, 1), real(null)),\\n          ErrorCodeMatch = iff(ErrBase > 0, round(100.0 * Err / ErrBase, 1), real(null)),\\n          SuccessInClassic = SuccessClassic, SuccessMissingInXdr = SuccessMissing\\n| order by SignInType asc\\n\", \"selectedWorkspaceIds\": [\"{WorkspaceId}\"]}",
+        "size": 3,
+        "queryType": "advancedHunting",
+        "crossComponentResources": [
+          "{Workspace}"
+        ],
+        "title": "Record comparison: classic sign-in tables vs. EntraIdSignInEvents (last 24 hours, excluding the most recent hour)",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "SuccessMissingInXdr",
+              "formatter": 18,
+              "formatOptions": {
+                "thresholdsOptions": "icons",
+                "thresholdsGrid": [
+                  {
+                    "operator": "==",
+                    "thresholdValue": "0",
+                    "representation": "success",
+                    "text": "{0}{1}"
+                  },
+                  {
+                    "operator": "Default",
+                    "thresholdValue": null,
+                    "representation": "2",
+                    "text": "{0}{1}"
+                  }
+                ]
+              }
+            }
+          ],
+          "labelSettings": [
+            {
+              "columnId": "SignInType",
+              "label": "Sign-in type"
+            },
+            {
+              "columnId": "InBoth",
+              "label": "Requests in both"
+            },
+            {
+              "columnId": "ClassicOnly",
+              "label": "Only classic"
+            },
+            {
+              "columnId": "XdrOnly",
+              "label": "Only XDR"
+            },
+            {
+              "columnId": "UpnMatch",
+              "label": "UPN match %"
+            },
+            {
+              "columnId": "AppMatch",
+              "label": "App match %"
+            },
+            {
+              "columnId": "CountryMatch",
+              "label": "Country match %"
+            },
+            {
+              "columnId": "OsMatch",
+              "label": "OS match %"
+            },
+            {
+              "columnId": "ErrorCodeMatch",
+              "label": "Error code match %"
+            },
+            {
+              "columnId": "SuccessInClassic",
+              "label": "Successes (classic)"
+            },
+            {
+              "columnId": "SuccessMissingInXdr",
+              "label": "Success missing in XDR"
+            }
+          ]
+        }
+      },
+      "name": "compare",
+      "conditionalVisibility": {
+        "parameterName": "Compare",
+        "comparison": "isEqualTo",
+        "value": "on"
+      }
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "Sign-ins are joined on `SigninLogs.Id` = `EntraIdSignInEvents.RequestId`. Match columns show the share of requests in both tables with the same value. *Error code match* only counts requests with a single row in each table. *Success missing in XDR* counts requests that succeeded in the classic tables but have no success row in `EntraIdSignInEvents`, for example after an MFA interruption. A few requests at the edges of the time range can show up in only one table, because the two tables use different timestamps. This step joins every sign-in of the last day and uses more of your advanced hunting CPU quota than the rest of the workbook."
+      },
+      "name": "compare-note",
+      "conditionalVisibility": {
+        "parameterName": "Compare",
+        "comparison": "isEqualTo",
+        "value": "on"
+      }
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "{\"__advancedHuntingSettings\": true, \"query\": \"let LookbackDays = {Lookback};\\nlet Rules = parse_json(```{Rules:escapejson}```);\\nlet Mapping = datatable(SourceTable:string, TargetTable:string, Coverage:string)[\\n \\\"SigninLogs\\\", \\\"EntraIdSignInEvents\\\", \\\"Included in ISOC\\\",\\n \\\"AADNonInteractiveUserSignInLogs\\\", \\\"EntraIdSignInEvents\\\", \\\"Included in ISOC\\\",\\n \\\"AADServicePrincipalSignInLogs\\\", \\\"EntraIdSpnSignInEvents\\\", \\\"Included in ISOC\\\",\\n \\\"AADManagedIdentitySignInLogs\\\", \\\"EntraIdSpnSignInEvents\\\", \\\"Included in ISOC\\\",\\n \\\"MicrosoftGraphActivityLogs\\\", \\\"GraphAPIAuditEvents\\\", \\\"Included in ISOC\\\",\\n \\\"AuditLogs\\\", \\\"EntraIdDirectoryAuditEvents\\\", \\\"Not on ISOC list\\\"];\\nlet Schema = union isfuzzy=true\\n    (SigninLogs | getschema | project T = \\\"SigninLogs\\\", ColumnName),\\n    (AADNonInteractiveUserSignInLogs | getschema | project T = \\\"AADNonInteractiveUserSignInLogs\\\", ColumnName),\\n    (AADServicePrincipalSignInLogs | getschema | project T = \\\"AADServicePrincipalSignInLogs\\\", ColumnName),\\n    (AADManagedIdentitySignInLogs | getschema | project T = \\\"AADManagedIdentitySignInLogs\\\", ColumnName),\\n    (AuditLogs | getschema | project T = \\\"AuditLogs\\\", ColumnName),\\n    (MicrosoftGraphActivityLogs | getschema | project T = \\\"MicrosoftGraphActivityLogs\\\", ColumnName),\\n    (EntraIdSignInEvents | getschema | project T = \\\"EntraIdSignInEvents\\\", ColumnName),\\n    (EntraIdSpnSignInEvents | getschema | project T = \\\"EntraIdSpnSignInEvents\\\", ColumnName),\\n    (GraphAPIAuditEvents | getschema | project T = \\\"GraphAPIAuditEvents\\\", ColumnName),\\n    (EntraIdDirectoryAuditEvents | getschema | project T = \\\"EntraIdDirectoryAuditEvents\\\", ColumnName);\\nlet Renames = datatable(SourceTable:string, SourceColumn:string, TargetColumn:string)[\\n \\\"SigninLogs\\\", \\\"UserPrincipalName\\\", \\\"AccountUpn\\\",\\n \\\"SigninLogs\\\", \\\"UserDisplayName\\\", \\\"AccountDisplayName\\\",\\n \\\"SigninLogs\\\", \\\"Identity\\\", \\\"AccountDisplayName\\\",\\n \\\"SigninLogs\\\", \\\"UserId\\\", \\\"AccountObjectId\\\",\\n \\\"SigninLogs\\\", \\\"AppDisplayName\\\", \\\"Application\\\",\\n \\\"SigninLogs\\\", \\\"AppId\\\", \\\"ApplicationId\\\",\\n \\\"SigninLogs\\\", \\\"ResultType\\\", \\\"ErrorCode\\\",\\n \\\"SigninLogs\\\", \\\"Status.errorCode\\\", \\\"ErrorCode\\\",\\n \\\"SigninLogs\\\", \\\"Location\\\", \\\"Country\\\",\\n \\\"SigninLogs\\\", \\\"LocationDetails\\\", \\\"City\\\",\\n \\\"SigninLogs\\\", \\\"LocationDetails.city\\\", \\\"City\\\",\\n \\\"SigninLogs\\\", \\\"LocationDetails.state\\\", \\\"State\\\",\\n \\\"SigninLogs\\\", \\\"LocationDetails.countryOrRegion\\\", \\\"Country\\\",\\n \\\"SigninLogs\\\", \\\"LocationDetails.geoCoordinates\\\", \\\"Latitude\\\",\\n \\\"SigninLogs\\\", \\\"DeviceDetail\\\", \\\"OSPlatform\\\",\\n \\\"SigninLogs\\\", \\\"DeviceDetail.operatingSystem\\\", \\\"OSPlatform\\\",\\n \\\"SigninLogs\\\", \\\"DeviceDetail.browser\\\", \\\"Browser\\\",\\n \\\"SigninLogs\\\", \\\"DeviceDetail.deviceId\\\", \\\"EntraIdDeviceId\\\",\\n \\\"SigninLogs\\\", \\\"DeviceDetail.displayName\\\", \\\"DeviceName\\\",\\n \\\"SigninLogs\\\", \\\"DeviceDetail.isCompliant\\\", \\\"IsCompliant\\\",\\n \\\"SigninLogs\\\", \\\"DeviceDetail.isManaged\\\", \\\"IsManaged\\\",\\n \\\"SigninLogs\\\", \\\"DeviceDetail.trustType\\\", \\\"DeviceTrustType\\\",\\n \\\"SigninLogs\\\", \\\"RiskEventTypes_V2\\\", \\\"RiskEventTypes\\\",\\n \\\"SigninLogs\\\", \\\"UserType\\\", \\\"IsGuestUser\\\",\\n \\\"SigninLogs\\\", \\\"ResourceIdentity\\\", \\\"ResourceId\\\",\\n \\\"SigninLogs\\\", \\\"UniqueTokenIdentifier\\\", \\\"UniqueTokenId\\\",\\n \\\"SigninLogs\\\", \\\"Id\\\", \\\"RequestId\\\",\\n \\\"SigninLogs\\\", \\\"IsThroughGlobalSecureAccess\\\", \\\"IsSignInThroughGlobalSecureAccess\\\",\\n \\\"SigninLogs\\\", \\\"CreatedDateTime\\\", \\\"Timestamp\\\",\\n \\\"SigninLogs\\\", \\\"AADTenantId\\\", \\\"TenantId\\\",\\n \\\"AADNonInteractiveUserSignInLogs\\\", \\\"UserPrincipalName\\\", \\\"AccountUpn\\\",\\n \\\"AADNonInteractiveUserSignInLogs\\\", \\\"UserDisplayName\\\", \\\"AccountDisplayName\\\",\\n \\\"AADNonInteractiveUserSignInLogs\\\", \\\"Identity\\\", \\\"AccountDisplayName\\\",\\n \\\"AADNonInteractiveUserSignInLogs\\\", \\\"UserId\\\", \\\"AccountObjectId\\\",\\n \\\"AADNonInteractiveUserSignInLogs\\\", \\\"AppDisplayName\\\", \\\"Application\\\",\\n \\\"AADNonInteractiveUserSignInLogs\\\", \\\"AppId\\\", \\\"ApplicationId\\\",\\n \\\"AADNonInteractiveUserSignInLogs\\\", \\\"ResultType\\\", \\\"ErrorCode\\\",\\n \\\"AADNonInteractiveUserSignInLogs\\\", \\\"Status.errorCode\\\", \\\"ErrorCode\\\",\\n \\\"AADNonInteractiveUserSignInLogs\\\", \\\"Location\\\", \\\"Country\\\",\\n \\\"AADNonInteractiveUserSignInLogs\\\", \\\"LocationDetails\\\", \\\"City\\\",\\n \\\"AADNonInteractiveUserSignInLogs\\\", \\\"LocationDetails.city\\\", \\\"City\\\",\\n \\\"AADNonInteractiveUserSignInLogs\\\", \\\"LocationDetails.state\\\", \\\"State\\\",\\n \\\"AADNonInteractiveUserSignInLogs\\\", \\\"LocationDetails.countryOrRegion\\\", \\\"Country\\\",\\n \\\"AADNonInteractiveUserSignInLogs\\\", \\\"LocationDetails.geoCoordinates\\\", \\\"Latitude\\\",\\n \\\"AADNonInteractiveUserSignInLogs\\\", \\\"DeviceDetail\\\", \\\"OSPlatform\\\",\\n \\\"AADNonInteractiveUserSignInLogs\\\", \\\"DeviceDetail.operatingSystem\\\", \\\"OSPlatform\\\",\\n \\\"AADNonInteractiveUserSignInLogs\\\", \\\"DeviceDetail.browser\\\", \\\"Browser\\\",\\n \\\"AADNonInteractiveUserSignInLogs\\\", \\\"DeviceDetail.deviceId\\\", \\\"EntraIdDeviceId\\\",\\n \\\"AADNonInteractiveUserSignInLogs\\\", \\\"DeviceDetail.displayName\\\", \\\"DeviceName\\\",\\n \\\"AADNonInteractiveUserSignInLogs\\\", \\\"DeviceDetail.isCompliant\\\", \\\"IsCompliant\\\",\\n \\\"AADNonInteractiveUserSignInLogs\\\", \\\"DeviceDetail.isManaged\\\", \\\"IsManaged\\\",\\n \\\"AADNonInteractiveUserSignInLogs\\\", \\\"DeviceDetail.trustType\\\", \\\"DeviceTrustType\\\",\\n \\\"AADNonInteractiveUserSignInLogs\\\", \\\"RiskEventTypes_V2\\\", \\\"RiskEventTypes\\\",\\n \\\"AADNonInteractiveUserSignInLogs\\\", \\\"UserType\\\", \\\"IsGuestUser\\\",\\n \\\"AADNonInteractiveUserSignInLogs\\\", \\\"ResourceIdentity\\\", \\\"ResourceId\\\",\\n \\\"AADNonInteractiveUserSignInLogs\\\", \\\"UniqueTokenIdentifier\\\", \\\"UniqueTokenId\\\",\\n \\\"AADNonInteractiveUserSignInLogs\\\", \\\"Id\\\", \\\"RequestId\\\",\\n \\\"AADNonInteractiveUserSignInLogs\\\", \\\"IsThroughGlobalSecureAccess\\\", \\\"IsSignInThroughGlobalSecureAccess\\\",\\n \\\"AADNonInteractiveUserSignInLogs\\\", \\\"CreatedDateTime\\\", \\\"Timestamp\\\",\\n \\\"AADNonInteractiveUserSignInLogs\\\", \\\"AADTenantId\\\", \\\"TenantId\\\",\\n \\\"AADServicePrincipalSignInLogs\\\", \\\"AppId\\\", \\\"ApplicationId\\\",\\n \\\"AADServicePrincipalSignInLogs\\\", \\\"AppDisplayName\\\", \\\"Application\\\",\\n \\\"AADServicePrincipalSignInLogs\\\", \\\"Identity\\\", \\\"ServicePrincipalName\\\",\\n \\\"AADServicePrincipalSignInLogs\\\", \\\"ResultType\\\", \\\"ErrorCode\\\",\\n \\\"AADServicePrincipalSignInLogs\\\", \\\"Location\\\", \\\"Country\\\",\\n \\\"AADServicePrincipalSignInLogs\\\", \\\"LocationDetails\\\", \\\"City\\\",\\n \\\"AADServicePrincipalSignInLogs\\\", \\\"LocationDetails.city\\\", \\\"City\\\",\\n \\\"AADServicePrincipalSignInLogs\\\", \\\"LocationDetails.state\\\", \\\"State\\\",\\n \\\"AADServicePrincipalSignInLogs\\\", \\\"LocationDetails.countryOrRegion\\\", \\\"Country\\\",\\n \\\"AADServicePrincipalSignInLogs\\\", \\\"LocationDetails.geoCoordinates\\\", \\\"Latitude\\\",\\n \\\"AADServicePrincipalSignInLogs\\\", \\\"ResourceIdentity\\\", \\\"ResourceId\\\",\\n \\\"AADServicePrincipalSignInLogs\\\", \\\"Id\\\", \\\"RequestId\\\",\\n \\\"AADServicePrincipalSignInLogs\\\", \\\"UniqueTokenIdentifier\\\", \\\"UniqueTokenId\\\",\\n \\\"AADServicePrincipalSignInLogs\\\", \\\"CreatedDateTime\\\", \\\"Timestamp\\\",\\n \\\"AADServicePrincipalSignInLogs\\\", \\\"AADTenantId\\\", \\\"TenantId\\\",\\n \\\"AADManagedIdentitySignInLogs\\\", \\\"AppId\\\", \\\"ApplicationId\\\",\\n \\\"AADManagedIdentitySignInLogs\\\", \\\"AppDisplayName\\\", \\\"Application\\\",\\n \\\"AADManagedIdentitySignInLogs\\\", \\\"Identity\\\", \\\"ServicePrincipalName\\\",\\n \\\"AADManagedIdentitySignInLogs\\\", \\\"ResultType\\\", \\\"ErrorCode\\\",\\n \\\"AADManagedIdentitySignInLogs\\\", \\\"Location\\\", \\\"Country\\\",\\n \\\"AADManagedIdentitySignInLogs\\\", \\\"LocationDetails\\\", \\\"City\\\",\\n \\\"AADManagedIdentitySignInLogs\\\", \\\"LocationDetails.city\\\", \\\"City\\\",\\n \\\"AADManagedIdentitySignInLogs\\\", \\\"LocationDetails.state\\\", \\\"State\\\",\\n \\\"AADManagedIdentitySignInLogs\\\", \\\"LocationDetails.countryOrRegion\\\", \\\"Country\\\",\\n \\\"AADManagedIdentitySignInLogs\\\", \\\"LocationDetails.geoCoordinates\\\", \\\"Latitude\\\",\\n \\\"AADManagedIdentitySignInLogs\\\", \\\"ResourceIdentity\\\", \\\"ResourceId\\\",\\n \\\"AADManagedIdentitySignInLogs\\\", \\\"Id\\\", \\\"RequestId\\\",\\n \\\"AADManagedIdentitySignInLogs\\\", \\\"UniqueTokenIdentifier\\\", \\\"UniqueTokenId\\\",\\n \\\"AADManagedIdentitySignInLogs\\\", \\\"CreatedDateTime\\\", \\\"Timestamp\\\",\\n \\\"AADManagedIdentitySignInLogs\\\", \\\"AADTenantId\\\", \\\"TenantId\\\",\\n \\\"MicrosoftGraphActivityLogs\\\", \\\"AppId\\\", \\\"ApplicationId\\\",\\n \\\"MicrosoftGraphActivityLogs\\\", \\\"UserId\\\", \\\"AccountObjectId\\\",\\n \\\"MicrosoftGraphActivityLogs\\\", \\\"IPAddress\\\", \\\"IpAddress\\\",\\n \\\"MicrosoftGraphActivityLogs\\\", \\\"DurationMs\\\", \\\"RequestDuration\\\",\\n \\\"MicrosoftGraphActivityLogs\\\", \\\"ResponseSizeBytes\\\", \\\"ResponseSize\\\",\\n \\\"MicrosoftGraphActivityLogs\\\", \\\"UniqueTokenId\\\", \\\"UniqueTokenIdentifier\\\",\\n \\\"MicrosoftGraphActivityLogs\\\", \\\"AadTenantId\\\", \\\"TenantId\\\"];\\nlet ValidRenames = Renames\\n| join kind=inner (Mapping | project SourceTable, TargetTable) on SourceTable\\n| join kind=inner (Schema | project TargetTable = T, TargetColumn = ColumnName) on TargetTable, TargetColumn\\n| project Src = SourceTable, SourceColumn, TargetColumn;\\nlet Ignore = dynamic([\\\"OperationName\\\", \\\"Category\\\", \\\"OperationVersion\\\", \\\"Level\\\", \\\"Resource\\\", \\\"ResourceGroup\\\", \\\"ResourceProvider\\\", \\\"SourceSystem\\\", \\\"Type\\\", \\\"TenantId\\\"]);\\nlet TextColumns = dynamic([\\\"ResultDescription\\\", \\\"ResultSignature\\\"]);\\nlet RuleBase = print R = Rules\\n| mv-expand R\\n| extend RuleId = tostring(R.name), Kind = tostring(R.kind), Name = tostring(R.properties.displayName), Enabled = tobool(R.properties.enabled),\\n         Severity = tostring(R.properties.severity), Query = tostring(R.properties.query)\\n| where Kind in (\\\"Scheduled\\\", \\\"NRT\\\") and isnotempty(Query)\\n| where \\\"{Scope}\\\" == \\\"all\\\" or Enabled\\n| extend Q = replace_regex(Query, @\\\"(^|[^:])//[^\\\\n]*\\\", @\\\"\\\\1\\\")\\n| extend SourceTables = set_union(extract_all(@\\\"\\\\b(SigninLogs|AADNonInteractiveUserSignInLogs|AADServicePrincipalSignInLogs|AADManagedIdentitySignInLogs|AuditLogs|MicrosoftGraphActivityLogs)\\\\b\\\", Q), dynamic([]))\\n| where array_length(SourceTables) > 0\\n| extend Tokens = set_union(extract_all(@\\\"\\\\b([A-Za-z_]\\\\w*(?:\\\\.[A-Za-z_]\\\\w*)*)\\\\b\\\", replace_regex(Q, @\\\"\\\"\\\"[^\\\"\\\"]*\\\"\\\"|'[^']*'\\\", \\\"''\\\")), dynamic([]))\\n| project-away R, Query;\\nlet Missing = RuleBase\\n| project RuleId, SourceTables, Tokens\\n| mv-expand Src = SourceTables to typeof(string)\\n| join kind=inner (Mapping | project Src = SourceTable, Target = TargetTable) on Src\\n| mv-expand Tok = Tokens to typeof(string)\\n| extend Root = tostring(split(Tok, \\\".\\\")[0]), Dotted = indexof(Tok, \\\".\\\") >= 0\\n| where Root !in (Ignore) and Root !in (TextColumns)\\n| join kind=inner (Schema | project Src = T, Root = ColumnName) on Src, Root\\n| join kind=leftouter (Schema | project Target = T, Root = ColumnName, InTarget = true) on Target, Root\\n| join kind=leftouter (ValidRenames | project Src, Tok = SourceColumn, RenFull = TargetColumn) on Src, Tok\\n| join kind=leftouter (ValidRenames | project Src, Root = SourceColumn, RenRoot = TargetColumn) on Src, Root\\n| where not(isnotempty(RenFull) or coalesce(InTarget, false) or (not(Dotted) and isnotempty(RenRoot)))\\n| extend Leaf = tostring(split(Tok, \\\".\\\")[-1])\\n| mv-expand Nm = pack_array(Tok, Root, Leaf) to typeof(string)\\n| summarize MissingCols = make_set(Tok), MissingNames = make_set(Nm) by RuleId;\\nlet RuleList = RuleBase\\n| join kind=leftouter Missing on RuleId\\n| extend MissingCols = iff(isnull(MissingCols), dynamic([]), MissingCols), MissingNames = iff(isnull(MissingNames), dynamic([]), MissingNames)\\n| extend ResultTypeFilter = Q matches regex @\\\"\\\\bResultType\\\\b\\\\s*(==|in)\\\",\\n         StringCompares = Q matches regex @'(ResultType|RiskLevel\\\\w*|RiskState|ConditionalAccessStatus)\\\\s*(==|!=|=~|!~|in~?\\\\s*\\\\()\\\\s*[\\\"'']',\\n         SplitsByType = Q matches regex @\\\"\\\\bby\\\\b[^|]*\\\\bType\\\\b\\\"\\n| mv-apply A = extract_all(@\\\"\\\\b(\\\\w+)\\\\s*=\\\\s*([^,=\\\\n|]+)\\\", Q) on (\\n    extend Nm = tostring(A[0]), Rhs = extract_all(@\\\"(\\\\w+)\\\", tostring(A[1]))\\n    | where array_length(set_intersect(Rhs, MissingNames)) > 0\\n    | summarize Aliases = make_set(Nm)\\n  )\\n| extend Names = set_union(MissingNames, Aliases)\\n| mv-apply P = extract_all(@\\\"\\\\b(\\\\w+)\\\\b\\\\)?\\\\s*(!?has_any|!?has_all|!?has_cs|!?has|!?contains|!?startswith|!?endswith|!?in~?|==|=~|!=|!~|matches regex)\\\\s*(.)\\\", Q) on (\\n    extend N = tostring(P[0]), Op = tostring(P[1]), Nx = tostring(P[2])\\n    | extend IsMissing = set_has_element(Names, N) and N !in (TextColumns),\\n             IsText = N in (TextColumns),\\n             Neg = Op startswith \\\"!\\\", Lit = Nx matches regex @'[(\\\"''0-9]'\\n    | summarize FilterMissing = make_set_if(N, IsMissing and (not(Neg) or not(Lit))),\\n                ExcludeMissing = make_set_if(N, IsMissing and Neg and Lit),\\n                FilterText = make_set_if(N, IsText and not(Neg)),\\n                ExcludeText = make_set_if(N, IsText and Neg),\\n                FuzzyText = countif(IsText and not(Neg) and Op !in (\\\"==\\\", \\\"=~\\\", \\\"in\\\", \\\"in~\\\"))\\n  )\\n| project-away Q, Tokens, MissingNames, Aliases, Names, RuleId1;\\nlet Volume = union withsource=Table isfuzzy=true SigninLogs, AADNonInteractiveUserSignInLogs, AADServicePrincipalSignInLogs, AADManagedIdentitySignInLogs,\\n    AuditLogs, MicrosoftGraphActivityLogs, EntraIdSignInEvents, EntraIdSpnSignInEvents, GraphAPIAuditEvents, EntraIdDirectoryAuditEvents\\n| where coalesce(Timestamp, TimeGenerated) > ago(LookbackDays * 1d)\\n| summarize Rows = count(), LastEvent = max(coalesce(Timestamp, TimeGenerated)) by Table;\\nlet AuditTargetRows = toscalar(union isfuzzy=true (print n = 0), (EntraIdDirectoryAuditEvents | where Timestamp > ago(LookbackDays * 1d) | summarize n = count()) | summarize sum(n));\\nlet Assessed = RuleList\\n| mv-expand Src = SourceTables to typeof(string)\\n| join kind=leftouter Mapping on $left.Src == $right.SourceTable\\n| join kind=leftouter (Volume | project Src = Table, SrcRows = Rows) on Src\\n| join kind=leftouter (Volume | project TargetTable = Table, TgtRows = Rows) on TargetTable\\n| summarize Sources = strcat_array(make_set(Src), \\\", \\\"), Targets = strcat_array(make_set_if(TargetTable, isnotempty(TargetTable)), \\\", \\\"),\\n            SourcesWithoutData = countif(coalesce(SrcRows, 0) == 0),\\n            UsesAudit = countif(Src == \\\"AuditLogs\\\"),\\n            TargetsWithoutData = countif(Src != \\\"AuditLogs\\\" and coalesce(TgtRows, 0) == 0)\\n    by Name, Enabled, Severity, Kind,\\n       FilterMissing = strcat_array(FilterMissing, \\\", \\\"), ExcludeMissing = strcat_array(ExcludeMissing, \\\", \\\"), MissingCols = strcat_array(MissingCols, \\\", \\\"),\\n       FilterText = strcat_array(FilterText, \\\", \\\"), ExcludeText = strcat_array(ExcludeText, \\\", \\\"), FuzzyText,\\n       ResultTypeFilter, StringCompares, SplitsByType\\n| extend AuditPending = UsesAudit > 0 and AuditTargetRows == 0, AuditReady = UsesAudit > 0 and AuditTargetRows > 0\\n| extend Assessment = case(AuditPending, \\\"Needs AuditLogs\\\",\\n                           isnotempty(FilterMissing), \\\"Not convertible\\\",\\n                           isnotempty(ExcludeMissing) or isnotempty(ExcludeText), \\\"Less precise\\\",\\n                           isnotempty(FilterText) and FuzzyText == 0 and ResultTypeFilter, \\\"Review\\\",\\n                           isnotempty(FilterText), \\\"Less precise\\\",\\n                           \\\"Convertible\\\")\\n| extend Notes = strcat_array(set_difference(pack_array(\\n             iff(AuditPending, \\\"AuditLogs: EntraIdDirectoryAuditEvents has no data in your tenant yet\\\", \\\"\\\"),\\n             iff(AuditReady, \\\"EntraIdDirectoryAuditEvents has data: columns checked against its schema, ISOC coverage still to confirm\\\", \\\"\\\"),\\n             iff(isnotempty(FilterMissing) and not(AuditPending), strcat(\\\"Core logic filters on \\\", FilterMissing, \\\", not available in \\\", Targets, \\\" (missing: \\\", MissingCols, \\\")\\\"), \\\"\\\"),\\n             iff(isnotempty(ExcludeMissing) and not(AuditPending), strcat(\\\"Exclusion on \\\", ExcludeMissing, \\\" can't be reproduced\\\"), \\\"\\\"),\\n             iff(isnotempty(ExcludeText), strcat(\\\"Exclusion on text column can't be reproduced: \\\", ExcludeText), \\\"\\\"),\\n             iff(isnotempty(FilterText) and FuzzyText == 0 and ResultTypeFilter, strcat(\\\"Exact match on \\\", FilterText, \\\": check whether the ErrorCode filter already covers it\\\"), \\\"\\\"),\\n             iff(isnotempty(FilterText) and not(FuzzyText == 0 and ResultTypeFilter), strcat(\\\"Text search on \\\", FilterText, \\\" is lost\\\"), \\\"\\\"),\\n             iff(isnotempty(MissingCols) and isempty(FilterMissing) and isempty(ExcludeMissing) and not(AuditPending), strcat(\\\"Missing in target, used only in output: \\\", MissingCols), \\\"\\\"),\\n             iff(StringCompares, \\\"Compares ResultType, risk or CA status as text: convert to int\\\", \\\"\\\"),\\n             iff(SplitsByType, \\\"Groups by Type: interactive and non-interactive are one table in Defender XDR\\\", \\\"\\\")), dynamic([\\\"\\\"])), \\\" \\u00b7 \\\")\\n| extend SourceData = iff(SourcesWithoutData == 0, \\\"Data\\\", \\\"No data\\\"),\\n         TargetData = case(TargetsWithoutData > 0, \\\"No data\\\", AuditPending, \\\"Audit table missing\\\", \\\"Data\\\");\\nAssessed\\n| extend Order = case(Assessment == \\\"Convertible\\\", 1, Assessment == \\\"Less precise\\\", 2, Assessment == \\\"Review\\\", 3, Assessment == \\\"Not convertible\\\", 4, 5)\\n| project Rule = Name, Severity, Assessment, Sources, Targets, SourceData, TargetData, Notes, Enabled = iff(Enabled, \\\"Yes\\\", \\\"No\\\"), Kind, Order\\n| order by Order asc, Rule asc\\n| project-away Order\", \"selectedWorkspaceIds\": [\"{WorkspaceId}\"]}",
+        "size": 0,
+        "queryType": "advancedHunting",
+        "crossComponentResources": [
+          "{Workspace}"
+        ],
+        "title": "Rules",
+        "showExportToExcel": true,
+        "gridSettings": {
+          "filter": true,
+          "formatters": [
+            {
+              "columnMatch": "Assessment",
+              "formatter": 18,
+              "formatOptions": {
+                "thresholdsOptions": "icons",
+                "thresholdsGrid": [
+                  {
+                    "operator": "==",
+                    "thresholdValue": "Convertible",
+                    "representation": "success",
+                    "text": "{0}{1}"
+                  },
+                  {
+                    "operator": "==",
+                    "thresholdValue": "Less precise",
+                    "representation": "2",
+                    "text": "{0}{1}"
+                  },
+                  {
+                    "operator": "==",
+                    "thresholdValue": "Review",
+                    "representation": "2",
+                    "text": "{0}{1}"
+                  },
+                  {
+                    "operator": "==",
+                    "thresholdValue": "Not convertible",
+                    "representation": "4",
+                    "text": "{0}{1}"
+                  },
+                  {
+                    "operator": "==",
+                    "thresholdValue": "Needs AuditLogs",
+                    "representation": "stopped",
+                    "text": "{0}{1}"
+                  },
+                  {
+                    "operator": "Default",
+                    "thresholdValue": null,
+                    "representation": "unknown",
+                    "text": "{0}{1}"
+                  }
+                ]
+              }
+            },
+            {
+              "columnMatch": "SourceData",
+              "formatter": 18,
+              "formatOptions": {
+                "thresholdsOptions": "icons",
+                "thresholdsGrid": [
+                  {
+                    "operator": "==",
+                    "thresholdValue": "Data",
+                    "representation": "success",
+                    "text": "{0}{1}"
+                  },
+                  {
+                    "operator": "==",
+                    "thresholdValue": "No data",
+                    "representation": "4",
+                    "text": "{0}{1}"
+                  },
+                  {
+                    "operator": "==",
+                    "thresholdValue": "Audit table missing",
+                    "representation": "stopped",
+                    "text": "{0}{1}"
+                  },
+                  {
+                    "operator": "==",
+                    "thresholdValue": "Included in ISOC",
+                    "representation": "success",
+                    "text": "{0}{1}"
+                  },
+                  {
+                    "operator": "==",
+                    "thresholdValue": "Not on ISOC list",
+                    "representation": "2",
+                    "text": "{0}{1}"
+                  },
+                  {
+                    "operator": "Default",
+                    "thresholdValue": null,
+                    "representation": "unknown",
+                    "text": "{0}{1}"
+                  }
+                ]
+              }
+            },
+            {
+              "columnMatch": "TargetData",
+              "formatter": 18,
+              "formatOptions": {
+                "thresholdsOptions": "icons",
+                "thresholdsGrid": [
+                  {
+                    "operator": "==",
+                    "thresholdValue": "Data",
+                    "representation": "success",
+                    "text": "{0}{1}"
+                  },
+                  {
+                    "operator": "==",
+                    "thresholdValue": "No data",
+                    "representation": "4",
+                    "text": "{0}{1}"
+                  },
+                  {
+                    "operator": "==",
+                    "thresholdValue": "Audit table missing",
+                    "representation": "stopped",
+                    "text": "{0}{1}"
+                  },
+                  {
+                    "operator": "==",
+                    "thresholdValue": "Included in ISOC",
+                    "representation": "success",
+                    "text": "{0}{1}"
+                  },
+                  {
+                    "operator": "==",
+                    "thresholdValue": "Not on ISOC list",
+                    "representation": "2",
+                    "text": "{0}{1}"
+                  },
+                  {
+                    "operator": "Default",
+                    "thresholdValue": null,
+                    "representation": "unknown",
+                    "text": "{0}{1}"
+                  }
+                ]
+              }
+            }
+          ],
+          "labelSettings": [
+            {
+              "columnId": "Sources",
+              "label": "Classic tables"
+            },
+            {
+              "columnId": "Targets",
+              "label": "Defender XDR tables"
+            },
+            {
+              "columnId": "SourceData",
+              "label": "Classic data"
+            },
+            {
+              "columnId": "TargetData",
+              "label": "XDR data"
+            }
+          ]
+        }
+      },
+      "name": "rules"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "{\"__advancedHuntingSettings\": true, \"query\": \"let Rules = parse_json(```{Rules:escapejson}```);\\nlet EntraFunctions = print F = split(```{Functions:escapejson}```, \\\",\\\")\\n| mv-expand F to typeof(string)\\n| extend Alias = trim(@\\\"\\\\s+\\\", F)\\n| where isnotempty(Alias)\\n| project Alias, k = 1;\\nlet RuleText = print R = Rules\\n| mv-expand R\\n| extend RuleId = tostring(R.name), Kind = tostring(R.kind), Name = tostring(R.properties.displayName), Enabled = tobool(R.properties.enabled),\\n         Severity = tostring(R.properties.severity), Q = replace_regex(tostring(R.properties.query), @\\\"(^|[^:])//[^\\\\n]*\\\", @\\\"\\\\1\\\")\\n| where Kind in (\\\"Scheduled\\\", \\\"NRT\\\") and isnotempty(Q)\\n| where \\\"{Scope}\\\" == \\\"all\\\" or Enabled\\n| extend Direct = Q matches regex @\\\"\\\\b(SigninLogs|AADNonInteractiveUserSignInLogs|AADServicePrincipalSignInLogs|AADManagedIdentitySignInLogs|AuditLogs|MicrosoftGraphActivityLogs)\\\\b\\\",\\n         OtherTables = set_union(extract_all(@\\\"\\\\b(AADUserRiskEvents|AADRiskyUsers|AADRiskyServicePrincipals|AADServicePrincipalRiskEvents|AADProvisioningLogs|ADFSSignInLogs)\\\\b\\\", Q), dynamic([])),\\n         Parsers = set_union(extract_all(@\\\"\\\\b(_?[Ii]m_?Authentication\\\\w*|_?ASim_?Authentication\\\\w*|vimAuthentication\\\\w*|_?[Ii]m_?AuditEvent\\\\w*|_?ASim_?AuditEvent\\\\w*)\\\\b\\\", Q), dynamic([]))\\n| project RuleId, Name, Severity, Enabled, Q, Direct, OtherTables, Parsers;\\nlet FunctionHits = RuleText\\n| extend k = 1\\n| join kind=inner EntraFunctions on k\\n| where Q has_cs Alias\\n| summarize Functions = make_set(Alias) by RuleId;\\nRuleText\\n| join kind=leftouter FunctionHits on RuleId\\n| extend Functions = iff(isnull(Functions), dynamic([]), Functions)\\n| where array_length(OtherTables) > 0 or array_length(Parsers) > 0 or array_length(Functions) > 0\\n| extend Uses = strcat_array(set_difference(pack_array(\\n             iff(array_length(OtherTables) > 0, strcat(\\\"Tables: \\\", strcat_array(OtherTables, \\\", \\\")), \\\"\\\"),\\n             iff(array_length(Parsers) > 0, strcat(\\\"ASIM parsers: \\\", strcat_array(Parsers, \\\", \\\")), \\\"\\\"),\\n             iff(array_length(Functions) > 0, strcat(\\\"Functions: \\\", strcat_array(Functions, \\\", \\\")), \\\"\\\")), dynamic([\\\"\\\"])), \\\" \\u00b7 \\\"),\\n         Reason = case(array_length(Functions) > 0 or array_length(Parsers) > 0, \\\"Reads Entra data through a function or parser: check the function, then the rule\\\",\\n                       \\\"Uses an Entra table without a mapped Defender XDR table\\\"),\\n         Coverage = iff(Direct, \\\"Partly assessed above\\\", \\\"Not assessed\\\")\\n| project Rule = Name, Severity, Coverage, Uses, Reason, Enabled = iff(Enabled, \\\"Yes\\\", \\\"No\\\")\\n| order by Coverage desc, Rule asc\\n\", \"selectedWorkspaceIds\": [\"{WorkspaceId}\"]}",
+        "size": 3,
+        "queryType": "advancedHunting",
+        "crossComponentResources": [
+          "{Workspace}"
+        ],
+        "title": "Entra detections the tracker can't assess",
+        "noDataMessage": "No rules read Entra data through functions, ASIM parsers or unmapped Entra tables.",
+        "noDataMessageStyle": 3,
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "Coverage",
+              "formatter": 18,
+              "formatOptions": {
+                "thresholdsOptions": "icons",
+                "thresholdsGrid": [
+                  {
+                    "operator": "==",
+                    "thresholdValue": "Partly assessed above",
+                    "representation": "2",
+                    "text": "{0}{1}"
+                  },
+                  {
+                    "operator": "Default",
+                    "thresholdValue": null,
+                    "representation": "stopped",
+                    "text": "{0}{1}"
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      },
+      "name": "notcovered"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "**Limits**\n\n- Table names are matched in the rule query text. Rules that read Entra data through workspace functions, ASIM parsers or other Entra tables are listed separately under *Entra detections the tracker can't assess*.\n- Columns are checked live: the workbook reads the schema of every classic and Defender XDR table with `getschema` and compares it with the columns each rule uses. Known renames (for example `UserPrincipalName` to `AccountUpn`) only count if the target column exists. When Microsoft adds a column or a table such as `EntraIdDirectoryAuditEvents`, the assessment picks it up without an update.\n- The assessment reads the query text. It follows columns renamed with `extend` and tells filters, exclusions and output apart. It doesn't run the converted query, so every rule still needs a test.\n- `EntraIdSignInEvents` requires a Microsoft Entra ID P2 license. For interactive sign-ins that were interrupted (for example by MFA) and then succeeded, it can contain only the interruption, not the success.\n- The *ISOC* column reflects Microsoft's list of included tables as of November 2026. Whether a table exists and has data is checked live.\n- `EntraIdSignInEvents` holds interactive and non-interactive sign-ins in one table, so its row count covers both classic tables."
+      },
+      "name": "limits"
+    }
+  ],
+  "isLocked": false,
+  "fromTemplateId": "sentinel-UserWorkbook"
+}
